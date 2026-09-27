@@ -1,0 +1,7 @@
+# HTTPS for the public site, with automatic certificates. Caddy sets X-Forwarded-For to the
+# visitor's address (the application keeps its last entry, see TRUST_PROXY).
+{$SITE_DOMAIN} {
+	encode gzip
+	header -Server
+	reverse_proxy app:8080
+}

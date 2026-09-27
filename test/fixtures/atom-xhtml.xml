@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title type="html">Versions &amp;amp; notes</title>
+  <link href="https://code.example/projet/releases.atom" rel="self"/>
+  <link href="https://code.example/projet/releases" rel="alternate" type="text/html"/>
+  <id>tag:code.example,2008:projet/releases</id>
+  <updated>2025-05-02T08:00:00Z</updated>
+  <entry>
+    <id>tag:code.example,2008:Repository/1/v2.0.0</id>
+    <updated>2025-05-02T08:00:00Z</updated>
+    <link rel="alternate" type="text/html" href="/projet/releases/tag/v2.0.0"/>
+    <title>v2.0.0</title>
+    <content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><p>Grande <strong>nouveauté</strong> : tout change.</p><p>Voir <a href="/doc">la doc</a>.</p></div></content>
+  </entry>
+  <entry>
+    <id>tag:code.example,2008:Repository/1/v1.9.1</id>
+    <published>2025-04-01T08:00:00.123+01:00</published>
+    <updated>2025-04-03T08:00:00Z</updated>
+    <link rel="alternate" href="https://code.example/projet/releases/tag/v1.9.1"/>
+    <link rel="enclosure" href="https://code.example/projet/v1.9.1.tar.gz"/>
+    <title type="html">v1.9.1 &lt;small&gt;correctif&lt;/small&gt;</title>
+    <summary type="html">&lt;p&gt;Corrige un &lt;code&gt;bug&lt;/code&gt;.&lt;/p&gt;</summary>
+    <content type="html">&lt;p&gt;Le contenu complet, plus long.&lt;/p&gt;</content>
+  </entry>
+</feed>

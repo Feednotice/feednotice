@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Le blog d&apos;essai</title>
+    <link>https://blog.example/</link>
+    <description>Un blog pour les tests.</description>
+    <atom:link rel="self" href="https://blog.example/feed.xml"/>
+    <atom:link rel="hub" href="https://pubsubhubbub.appspot.com/"/>
+    <item>
+      <title>Premier &lt;em&gt;billet&lt;/em&gt;</title>
+      <link>https://blog.example/2025/premier</link>
+      <guid isPermaLink="true">https://blog.example/2025/premier</guid>
+      <pubDate>Tue, 10 Jun 2025 04:00:00 +0200</pubDate>
+      <description><![CDATA[<p>Bonjour <b>tout le monde</b> &amp; les autres.</p><p><img src="x.png">Second paragraphe.</p><script>alert(1)</script>]]></description>
+    </item>
+    <item>
+      <title>Sans guid</title>
+      <link>/2025/sans-guid</link>
+      <pubDate>Mon, 32 Foo 2025 99:99:99 GMT</pubDate>
+      <description>&lt;p&gt;Échappé &amp;amp; décodé&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Ni guid ni lien</title>
+      <dc:date>2025-06-08T12:00:00+02:00</dc:date>
+      <description>Juste du texte.</description>
+    </item>
+    <item>
+      <title>Date en français</title>
+      <guid isPermaLink="false">urn:uuid:4</guid>
+      <pubDate>hier soir</pubDate>
+      <content:encoded><![CDATA[<ul><li>un</li><li>deux</li></ul>]]></content:encoded>
+    </item>
+    <item>
+      <title>Lien dangereux</title>
+      <link>javascript:alert(1)</link>
+      <guid>urn:uuid:5</guid>
+      <pubDate>2025-06-01</pubDate>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="fr">
+  <id>https://civic.example/commune/99001-flux.xml</id>
+  <title>Civic — Saint-Exemple</title>
+  <subtitle>Ce qui bouge à Saint-Exemple et dans les structures dont la commune dépend : marchés notifiés, délibérations publiées, associations créées.</subtitle>
+  <updated>2026-09-07T00:00:00Z</updated>
+  <link rel="self" href="https://civic.example/commune/99001-flux.xml"/>
+  <link rel="alternate" type="text/html" href="https://civic.example/commune/99001"/>
+  <author><name>Civic</name></author>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-09-07-250301165-1y6plk</id>
+<title>Marché notifié — MOE Liaison Mazerier La Serre</title>
+<updated>2026-09-07T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">SM des eaux de l&apos;Allier (SMEA) · 107 k€ · Procédure adaptée</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-09-03-250301165-deq4r2</id>
+<title>Marché notifié — MOE VEINE NORD T2 NOYANT VILLEFRANCHE</title>
+<updated>2026-09-03T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">SM des eaux de l&apos;Allier (SMEA) · 100 k€ · Procédure adaptée</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-08-27-200071363-13u82zd</id>
+<title>Marché notifié — TRAVAUX ORDONNANCEMENT COMPTEURS</title>
+<updated>2026-08-27T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">CA Vichy Communauté · 479 k€ · Procédure adaptée</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-08-24-250300233-1yuq98y</id>
+<title>Marché notifié — LOT No1 NORD - Couzon, Le Brethon, Saint-Léon et Valigny</title>
+<updated>2026-08-24T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">Syndicat départemental d&apos;énergie de l&apos;Allier (SDE03) · 40 k€ · Procédure adaptée</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-08-24-250300233-1r6lha4</id>
+<title>Marché notifié — LOT No2 SUD - Bayet, Billy, Châtelus, Ébreuil, Saint-Exemple et Saint-Prix</title>
+<updated>2026-08-24T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">Syndicat départemental d&apos;énergie de l&apos;Allier (SDE03) · 40 k€ · Procédure adaptée</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-08-20-250300233-17yd9nh</id>
+<title>Marché notifié — Marché d&apos;exploitation / d&apos;entretien - maintenance sur la chaufferie de Lurcy-Lévis</title>
+<updated>2026-08-20T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">Syndicat départemental d&apos;énergie de l&apos;Allier (SDE03) · 269 k€ · Appel d&apos;offres ouvert</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-08-17-200071363-8zmdau</id>
+<title>Marché notifié — ELABORATION, FABRICATION ET LIVRAISON EN LIAISON FROIDE POUR</title>
+<updated>2026-08-17T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">CA Vichy Communauté · 210 k€ · Procédure adaptée</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-08-11-200071363-1xlda0i</id>
+<title>Marché notifié — GARDIENNAGE ET INTERVENTION SUR BATIMENTS  VICHY ET VICHY CO</title>
+<updated>2026-08-11T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">CA Vichy Communauté · 300 k€ · Procédure adaptée</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-08-03-200071363-1vx13vf</id>
+<title>Marché notifié — FOURNITURE COMPTEURS D&apos;EAU TELERELEVE</title>
+<updated>2026-08-03T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">CA Vichy Communauté · 650 k€ · Appel d&apos;offres ouvert</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-07-31-99001-1kh4qf8</id>
+<title>Marché notifié — Aménagement de la Place de la Mairie et abords de l&apos;Eglise</title>
+<updated>2026-07-31T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">178 k€ · Procédure adaptée</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-07-29-250300050-1ep8dfr</id>
+<title>Marché notifié — Fourniture de pièces d&apos;origine RENAULT et matériels de rechange Lot 1</title>
+<updated>2026-07-29T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">SICTOM Sud-Allier · 100 k€ · Appel d&apos;offres ouvert</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-07-29-250300050-15gfiqp</id>
+<title>Marché notifié — Fourniture de pièces d&apos;origine SCANIA et matériels de rechange Lot 1</title>
+<updated>2026-07-29T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">SICTOM Sud-Allier · 120 k€ · Appel d&apos;offres ouvert</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-07-29-250300050-7a48b6</id>
+<title>Marché notifié — Prestations comprenant les réparations aux ateliers de l&apos;attributaire avec fourniture de …</title>
+<updated>2026-07-29T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">SICTOM Sud-Allier · 100 k€ · Appel d&apos;offres ouvert</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-07-29-250300050-7a48b6</id>
+<title>Marché notifié — Prestations comprenant les réparations aux ateliers de l&apos;attributaire avec fourniture de …</title>
+<updated>2026-07-29T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">SICTOM Sud-Allier · 80 k€ · Appel d&apos;offres ouvert</content>
+</entry>
+<entry>
+<id>tag:civic.example,2026:99001/0-2026-07-24-200071363-1kzuzwt</id>
+<title>Marché notifié — FOURNITURE CHLORURE FERREUX</title>
+<updated>2026-07-24T00:00:00Z</updated>
+<category term="Marché notifié"/>
+<content type="text">CA Vichy Communauté · 209 k€ · Procédure adaptée</content>
+</entry>
+</feed>

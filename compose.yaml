@@ -1,0 +1,81 @@
+# FeedNotice: one VPS, three containers.
+#   app    web pages, feed reading, sending (Node.js + SQLite)
+#   mta    send-only Postfix; receives only the bounce address and hands it to the app
+#   caddy  HTTPS reverse proxy
+# Settings come from .env (see .env.example). Two variables, for a deployment that includes
+# this file from another folder (docs/deploy.md): ENV_FILE, the settings file, and BRAND_PATH,
+# your logo, favicons and colours (docs/branding.md). Both paths are relative to this folder.
+
+name: feednotice
+
+# Container logs are rotated by size: Postfix logs contain recipient addresses (personal data),
+# so they must not grow forever. See docs/privacy.md.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  app:
+    build: .
+    logging: *logging
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      BRAND_DIR: /app/brand
+      DB_PATH: /app/data/feednotice.sqlite
+      MAIL_TRANSPORT: smtp
+      SMTP_HOST: mta
+      SMTP_PORT: "2525"
+      TRUST_PROXY: "1"
+    volumes:
+      - app-data:/app/data
+      - ${BRAND_PATH:-./docker/no-brand}:/app/brand:ro
+    networks: [internal]
+    depends_on: [mta]
+
+  mta:
+    build: docker/mta
+    logging: *logging
+    restart: unless-stopped
+    hostname: ${MTA_HOSTNAME}
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      APP_URL: http://app:8080
+      MTA_TRUSTED_NETWORKS: 172.30.0.0/24
+    ports:
+      - "25:25"
+    volumes:
+      - mta-spool:/var/spool/postfix
+    networks: [internal]
+
+  caddy:
+    image: caddy:2-alpine
+    logging: *logging
+    restart: unless-stopped
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [internal]
+    depends_on: [app]
+
+networks:
+  internal:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  app-data:
+  mta-spool:
+  caddy-data:
+  caddy-config:
