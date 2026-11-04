@@ -24,6 +24,7 @@ export interface FeedRow {
   error_count: number;
   last_error: string | null;
   status: 'active' | 'dead';
+  dead_at: number | null;
 }
 
 export interface EntryRow {
@@ -48,6 +49,7 @@ export interface SubscriptionRow {
   last_digest_at: number | null;
   digest_hour: number | null;
   digest_weekday: number | null;
+  dead_notice_at: number | null;
 }
 
 export interface SubscriberRow {

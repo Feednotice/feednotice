@@ -1,6 +1,7 @@
 // Publisher space: magic-link sign-in, domain proofs, branding, counts that reveal no one.
 
 import assert from 'node:assert/strict';
+import { flushSends } from '../src/mail/quota.ts';
 import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 import {
@@ -8,6 +9,7 @@ import {
   recheckDomains, verificationRecord, verifyDomain, type VerifyDeps,
 } from '../src/publishers.ts';
 import { createServer } from '../src/web/server.ts';
+import { TERMS_VERSION } from '../src/publishers.ts';
 import { NO_BRAND } from '../src/web/brand.ts';
 import { page, subscribePage } from '../src/web/views.ts';
 import { parseFeed } from '../src/feed/parse.ts';
@@ -124,11 +126,16 @@ describe('publisher space over HTTP', () => {
   after(() => app.close());
 
   async function post(path: string, form: Record<string, string>): Promise<Response> {
-    return fetch(site + path, { method: 'POST', body: new URLSearchParams(form).toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, redirect: 'manual' });
+    const r = await fetch(site + path, { method: 'POST', body: new URLSearchParams(form).toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, redirect: 'manual' });
+    await flushSends();
+    return r;
   }
 
   it('sends a sign-in link and creates nothing before it is opened', async () => {
-    const r = await post('/publishers', { email: 'Editor@Example.org', lang: 'en' });
+    const refused = await post('/publishers', { email: 'Editor@Example.org', lang: 'en' });
+    assert.equal(refused.status, 422, 'the terms must be accepted');
+    assert.match(await refused.text(), /Please accept the terms of use/);
+    const r = await post('/publishers', { email: 'Editor@Example.org', lang: 'en', terms: '1' });
     assert.equal(r.status, 200);
     assert.match(await r.text(), /sign-in link, valid for 24 hours/);
     assert.equal((ctx.db.prepare('SELECT COUNT(*) AS n FROM publishers').get() as { n: number }).n, 0);
@@ -143,6 +150,9 @@ describe('publisher space over HTTP', () => {
     const page1 = await fetch(site + spacePath);
     assert.equal(page1.status, 200);
     assert.match(await page1.text(), /Signed in as editor@example\.org · Free plan/);
+    const accepted = ctx.db.prepare('SELECT terms_version, terms_accepted_at FROM publishers').get() as { terms_version: number; terms_accepted_at: number };
+    assert.equal(accepted.terms_version, TERMS_VERSION, 'opening the link records the terms accepted to get it');
+    assert.ok(accepted.terms_accepted_at);
     assert.equal((await post(spacePath, { action: 'add', domain: 'https://www.Example.org/', lang: 'en' })).status, 303);
     const html = await (await fetch(site + spacePath)).text();
     assert.match(html, /<strong>www\.example\.org<\/strong> — Not verified yet/);
@@ -167,18 +177,25 @@ describe('publisher space over HTTP', () => {
     ctx.db.prepare("INSERT INTO subscribers (email, created_at) VALUES ('one@x.example', 0)").run();
     ctx.db.prepare("INSERT INTO subscriptions (subscriber_id, feed_id, cadence, status, created_at) VALUES (1, 1, 'daily', 'active', 0)").run();
     const en = await (await fetch(site + spacePath)).text();
-    assert.match(en, /<td><a href="https:\/\/www\.example\.org\/feed">News<\/a><\/td><td>fewer than 5<\/td>/);
+    assert.match(en, /<td><a href="https:\/\/www\.example\.org\/feed">News<\/a><br><a class="muted" href="\/publishers\?feed=https%3A%2F%2Fwww\.example\.org%2Ffeed&amp;lang=en#button">Button code<\/a><\/td><td>—<\/td><td>—<\/td><td>—<\/td><td><strong>fewer than 5<\/strong><\/td>/);
     assert.doesNotMatch(en, /<td>1<\/td>/);
     const fr = await (await fetch(`${site}${spacePath}?lang=fr`)).text();
     assert.match(fr, /Espace éditeur/);
     assert.match(fr, /moins de 5/);
+    // Six subscribers: the total shows, but not a breakdown that would give away the lone daily one.
+    for (let i = 2; i <= 7; i++) {
+      ctx.db.prepare('INSERT INTO subscribers (email, created_at) VALUES (?, 0)').run(`r${i}@x.example`);
+      ctx.db.prepare("INSERT INTO subscriptions (subscriber_id, feed_id, cadence, status, created_at) VALUES (?, 1, 'immediate', 'active', 0)").run(i);
+    }
+    const more = await (await fetch(site + spacePath)).text();
+    assert.match(more, /<td>—<\/td><td>—<\/td><td>—<\/td><td><strong>7<\/strong><\/td>/);
   });
 
   it('deletes the space; readers keep their subscriptions', async () => {
     const r = await post(spacePath, { action: 'delete', lang: 'en' });
     assert.match(await r.text(), /Publisher space deleted/);
     assert.equal((ctx.db.prepare('SELECT COUNT(*) AS n FROM publishers').get() as { n: number }).n, 0);
-    assert.equal((ctx.db.prepare('SELECT COUNT(*) AS n FROM subscriptions').get() as { n: number }).n, 1);
+    assert.equal((ctx.db.prepare('SELECT COUNT(*) AS n FROM subscriptions').get() as { n: number }).n, 7);
   });
 
   it('refuses forged or expired links', async () => {

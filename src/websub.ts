@@ -5,7 +5,8 @@
 // A notification is never trusted as content: it only moves the feed's next read to now,
 // through the usual path (fetch, parse, deduplicate). Notifications must be signed with the
 // per-feed secret given to the hub; at most one read per minute per feed follows from them.
-// Periodic reading continues, less often (every 6 hours), as a safety net.
+// Periodic reading continues, less often (every 6 hours), as a safety net. Only https hubs
+// are used: the per-feed secret must not travel in clear.
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Config } from './config.ts';
@@ -49,7 +50,8 @@ export async function renewWebSub(ctx: Ctx, limit = 20): Promise<number> {
       AND (f.websub_expires_at IS NULL OR f.websub_expires_at < ?)
       AND (f.websub_requested_at IS NULL OR f.websub_requested_at < ?)
       AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = f.id AND s.status = 'active')
-    LIMIT ?`).all(now + DAY, now - RETRY_AFTER_FAILURE, limit) as unknown as FeedRow[];
+      AND (f.hub_url LIKE 'https://%' OR ?)
+    LIMIT ?`).all(now + DAY, now - RETRY_AFTER_FAILURE, config.allowPrivateFeeds ? 1 : 0, limit) as unknown as FeedRow[];
   let accepted = 0;
   for (const feed of due) {
     db.prepare('UPDATE feeds SET websub_requested_at = ? WHERE id = ?').run(now, feed.id);
@@ -90,14 +92,25 @@ export function verifyIntent(ctx: Ctx, feed: FeedRow, query: URLSearchParams): s
   return query.get('hub.challenge');
 }
 
+/** Largest notification body read; the content itself is never used, only its signature. */
+const MAX_NOTIFICATION = 5 * 1024 * 1024;
+
 /**
  * Content distribution (POST). Returns true if the signature is valid and a read was
- * scheduled. The caller answers 2xx either way, as the specification requires.
+ * scheduled. The caller answers 2xx either way, as the specification asks. The body is
+ * hashed as it arrives, never held in memory; without a well-formed signature it is not read.
  */
-export function notify(ctx: Ctx, feed: FeedRow, body: Buffer, signature: string | undefined): boolean {
+export async function notify(ctx: Ctx, feed: FeedRow, body: AsyncIterable<Buffer | string>, signature: string | undefined): Promise<boolean> {
   const m = /^(sha1|sha256|sha384|sha512)=([0-9a-f]+)$/i.exec(signature ?? '');
   if (!m) return false;
-  const expected = createHmac(m[1].toLowerCase(), hubSecret(ctx.config, feed.id)).update(body).digest();
+  const hmac = createHmac(m[1].toLowerCase(), hubSecret(ctx.config, feed.id));
+  let size = 0;
+  for await (const chunk of body) {
+    size += chunk.length;
+    if (size > MAX_NOTIFICATION) return false;
+    hmac.update(chunk);
+  }
+  const expected = hmac.digest();
   const given = Buffer.from(m[2], 'hex');
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return false;
   const now = ctx.now();

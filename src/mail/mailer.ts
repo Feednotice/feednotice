@@ -118,6 +118,9 @@ function toNodemailer(mail: OutgoingMail, from: string, envelope: EnvelopeOption
   };
 }
 
+export const DKIM_HEADERS = 'From:Sender:Reply-To:Subject:Date:Message-ID:To:Cc:MIME-Version:Content-Type:Content-Transfer-Encoding:'
+  + 'List-Id:List-Unsubscribe:List-Unsubscribe-Post:Auto-Submitted';
+
 export function createMailer(config: Config): Mailer {
   const envelope: EnvelopeOptions = {
     bounceAddress: config.bounceAddress,
@@ -129,7 +132,12 @@ export function createMailer(config: Config): Mailer {
   const { host, port, user, pass } = config.smtp;
   if (!host) throw new Error('SMTP_HOST is required with MAIL_TRANSPORT=smtp.');
   const dkim = config.dkim.keyFile
-    ? { domainName: config.dkim.domain, keySelector: config.dkim.selector, privateKey: readFileSync(config.dkim.keyFile, 'utf8') }
+    ? {
+      domainName: config.dkim.domain, keySelector: config.dkim.selector, privateKey: readFileSync(config.dkim.keyFile, 'utf8'),
+      // RFC 8058: both unsubscribe headers must be signed (nodemailer's default list lacks
+      // List-Unsubscribe-Post), or Gmail and Yahoo ignore one-click unsubscribe.
+      headerFieldNames: DKIM_HEADERS,
+    }
     : undefined;
   const transport = nodemailer.createTransport({
     host,

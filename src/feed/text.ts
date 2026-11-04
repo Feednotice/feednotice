@@ -24,16 +24,44 @@ export function decodeEntities(s: string): string {
   });
 }
 
+/** Longest HTML fragment converted; beyond it the content is cut (emails show 3,000 characters at most). */
+export const MAX_HTML = 256 * 1024;
+
+/**
+ * Removes every `open … close` section, scanning with indexOf: linear time, whatever the
+ * input (a regular expression with a lazy `[\s\S]*?` is quadratic on unclosed sections).
+ */
+function removeSections(s: string, open: RegExp, close: (tag: string) => string): string {
+  let out = '';
+  let pos = 0;
+  const lower = s.toLowerCase();
+  open.lastIndex = 0;
+  for (let m = open.exec(s); m; m = open.exec(s)) {
+    if (m.index < pos) continue;
+    const end = lower.indexOf(close(m[1]?.toLowerCase() ?? ''), m.index + m[0].length);
+    out += s.slice(pos, m.index);
+    if (end === -1) return out;
+    pos = end + close(m[1]?.toLowerCase() ?? '').length;
+    // A closing tag ends at its ">".
+    if (s[pos - 1] !== '>') {
+      const gt = s.indexOf('>', pos);
+      pos = gt === -1 ? s.length : gt + 1;
+    }
+    open.lastIndex = pos;
+  }
+  return out + s.slice(pos);
+}
+
 /** Reduces an HTML fragment to text: paragraphs and lists are kept, everything else is dropped. */
 export function htmlToText(html: string): string {
-  let s = html
-    .replace(/<(script|style|head|iframe|object|svg)\b[\s\S]*?<\/\1\s*>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
+  // Tag patterns use [^<>]: a run of "<" without ">" stays linear.
+  let s = removeSections(html.slice(0, MAX_HTML), /<!--()/g, () => '-->');
+  s = removeSections(s, /<(script|style|head|iframe|object|svg)\b/gi, (tag) => `</${tag}`)
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<li\b[^>]*>/gi, '\n• ')
+    .replace(/<li\b[^<>]*>/gi, '\n• ')
     .replace(/<\/(p|div|h[1-6]|ul|ol|blockquote|pre|tr|table|section|article)\s*>/gi, '\n\n')
-    .replace(/<(p|div|h[1-6]|ul|ol|blockquote|pre|tr|table|section|article)\b[^>]*>/gi, '\n\n')
-    .replace(/<[^>]+>/g, '');
+    .replace(/<(p|div|h[1-6]|ul|ol|blockquote|pre|tr|table|section|article)\b[^<>]*>/gi, '\n\n')
+    .replace(/<\/?[a-z!?/][^<>]*>/gi, '');
   s = decodeEntities(s).replace(/\u00a0/g, ' ');
   return normalizeWhitespace(s);
 }

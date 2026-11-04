@@ -5,6 +5,8 @@
 //   node src/cli.ts backup [keep]        consistent copy of the database into data/backups/
 //   node src/cli.ts dkim-keygen          creates the DKIM key and prints the DNS record
 //   node src/cli.ts bounce < message     reads one bounce from standard input (manual use)
+//   node src/cli.ts stats [days]         operator counters per day, and the current state
+//   node src/cli.ts doctor               checks DNS, mail and HTTPS against the settings
 //
 // Configuration comes from environment variables (the .env file, loaded by Docker Compose).
 // Outside Docker, a .env file at the project root is read too.
@@ -16,8 +18,11 @@ import { loadConfig } from './config.ts';
 import type { Ctx } from './context.ts';
 import { runCycle } from './cycle.ts';
 import { openDb } from './db.ts';
+import { formatChecks, runDoctor } from './doctor.ts';
 import { parseBounce } from './mail/bounce.ts';
 import { createMailer, recipientTagger } from './mail/mailer.ts';
+import { flushSends } from './mail/quota.ts';
+import { statsText } from './ops.ts';
 import { purge } from './purge.ts';
 import { handleMailEvent } from './subscriptions.ts';
 import { createServer } from './web/server.ts';
@@ -30,6 +35,11 @@ async function main(): Promise<void> {
   if (existsSync(envFile)) process.loadEnvFile(envFile);
   const config = loadConfig();
 
+  if (command === 'doctor') {
+    const checks = await runDoctor(config, process.env);
+    console.log(formatChecks(checks));
+    process.exit(checks.some((c) => c.status === 'fail') ? 1 : 0);
+  }
   if (command === 'dkim-keygen') return dkimKeygen(config.dkim.keyFile || join(dirname(config.dbPath), 'dkim', `${config.dkim.selector}.pem`), config.dkim);
 
   if (config.dbPath !== ':memory:') mkdirSync(dirname(config.dbPath), { recursive: true });
@@ -60,6 +70,9 @@ async function main(): Promise<void> {
       ctx.log(`bounce: ${events.length} event(s)`);
       process.exit(0);
     }
+    case 'stats':
+      console.log(statsText(ctx, Number(process.argv[3] ?? 14)));
+      process.exit(0);
     case 'serve':
       break;
     default:
@@ -69,7 +82,7 @@ async function main(): Promise<void> {
   const server = createServer(ctx).listen(config.port, () => ctx.log(`${config.serviceName} listening on port ${config.port} (${config.baseUrl})`));
   const stop = () => {
     ctx.log('stopping');
-    server.close(() => process.exit(0));
+    server.close(() => void flushSends().finally(() => process.exit(0)));
     setTimeout(() => process.exit(0), 5000).unref();
   };
   process.on('SIGTERM', stop);

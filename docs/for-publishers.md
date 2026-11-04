@@ -18,6 +18,10 @@ Next to your feed link, add a plain link to the service with your feed's address
   feeds your page announces (`<link rel="alternate" type="application/atom+xml">`) and offers a
   choice when there are several.
 
+Or let the service prepare it: `https://service.example/publishers?feed=<your feed>` gives the
+link and a button in your colour and your readers' language, ready to paste. The button is a
+plain link with an inline style and an inline icon: no script, nothing loaded from elsewhere.
+
 In a template, for example with Astro:
 
 ```astro
@@ -71,4 +75,6 @@ Once verified (and checked again every 30 days):
 - the space shows confirmed subscriptions per feed and cadence, never an address and never a
   number below 5.
 
-Nothing in the publisher space is needed for the link to work.
+Opening a space means accepting the service's terms of use (`/terms`), which include a part for
+publishers. The split per cadence is hidden when a column would hold a small number. Nothing in
+the publisher space is needed for the link to work.

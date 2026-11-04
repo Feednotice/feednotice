@@ -6,11 +6,12 @@ import { transaction } from './db.ts';
 import { loadFeedCached, normalizeFeedUrl, upsertFeed } from './feeds.ts';
 import type { FeedErrorCode } from './i18n/en.ts';
 import type { Locale } from './i18n/index.ts';
-import { sendCounted } from './mail/quota.ts';
+import { sendInBackground } from './mail/quota.ts';
 import { renderAlreadySubscribedMail, renderConfirmationMail, renderManageLinkMail } from './mail/render.ts';
 import type { Cadence, FeedRow, SubscriberRow, SubscriptionRow } from './model.ts';
 import { CADENCES } from './model.ts';
 import { allow, DAY, HOUR } from './ratelimit.ts';
+import { count } from './stats.ts';
 import { fingerprint, signToken } from './tokens.ts';
 
 /** Anti-abuse: far above normal use. */
@@ -59,6 +60,12 @@ export async function requestSubscription(
   // At most three confirmation emails per day and address: the service cannot be used to harass someone.
   if (!allow(db, `sub-mail:${emailHash}`, 3, DAY, now)) return { kind: 'sent' };
   if (db.prepare('SELECT 1 FROM suppressions WHERE email_hash = ?').get(emailHash)) return { kind: 'sent' };
+  // A ceiling for everyone together: requests spread over many addresses cannot turn the
+  // service into a spam cannon. Same answer; the operator sees it in the log.
+  if (config.confirmMaxPerHour > 0 && !allow(db, 'confirm-all', config.confirmMaxPerHour, HOUR, now)) {
+    ctx.log('confirmation ceiling reached (CONFIRM_MAX_PER_HOUR): requests are answered but not sent');
+    return { kind: 'sent' };
+  }
 
   const feed = upsertFeed(ctx, loaded);
   const created = transaction(db, () => {
@@ -80,10 +87,10 @@ export async function requestSubscription(
   if (subscriber.status === 'suspended') return { kind: 'sent' };
 
   if (subscription.status === 'active') {
-    await sendCounted(ctx, renderAlreadySubscribedMail(config, subscriber.locale, feed, email));
+    sendInBackground(ctx, renderAlreadySubscribedMail(config, subscriber.locale, feed, email));
   } else {
     const token = signToken(config.secret, 'confirm', subscription.id, now + config.pendingTtlDays * DAY);
-    await sendCounted(ctx, renderConfirmationMail(config, subscriber.locale, feed, email, `${config.baseUrl}/c/${token}`, subscription.cadence));
+    sendInBackground(ctx, renderConfirmationMail(config, subscriber.locale, feed, email, `${config.baseUrl}/c/${token}`, subscription.cadence), () => count(ctx, 'sub.requested'));
   }
   return { kind: 'sent' };
 }
@@ -98,7 +105,8 @@ export function getSubscription(ctx: Ctx, id: number): (SubscriptionRow & { feed
 
 /** Confirms. Entries that appeared since the request will be sent (see delivery.ts). */
 export function confirmSubscription(ctx: Ctx, id: number): void {
-  ctx.db.prepare("UPDATE subscriptions SET status = 'active', confirmed_at = ? WHERE id = ? AND status = 'pending'").run(ctx.now(), id);
+  const res = ctx.db.prepare("UPDATE subscriptions SET status = 'active', confirmed_at = ? WHERE id = ? AND status = 'pending'").run(ctx.now(), id);
+  count(ctx, 'sub.confirmed', Number(res.changes));
 }
 
 /** Deletes the subscription; if it was the last one, the address is erased. */
@@ -109,12 +117,32 @@ export function unsubscribe(ctx: Ctx, id: number): boolean {
     if (!sub) return false;
     db.prepare('DELETE FROM subscriptions WHERE id = ?').run(id);
     db.prepare('DELETE FROM subscribers WHERE id = ? AND NOT EXISTS (SELECT 1 FROM subscriptions WHERE subscriber_id = ?)').run(sub.subscriber_id, sub.subscriber_id);
+    count(ctx, 'sub.stopped');
     return true;
   });
 }
 
+/** Feeds of the subscriber's active subscriptions with this digest cadence. */
+export function digestFeeds(ctx: Ctx, subscriberId: number, cadence: 'daily' | 'weekly'): string[] {
+  return (ctx.db.prepare(`SELECT f.title FROM subscriptions s JOIN feeds f ON f.id = s.feed_id
+    WHERE s.subscriber_id = ? AND s.cadence = ? AND s.status = 'active' ORDER BY f.title`).all(subscriberId, cadence) as { title: string }[]).map((r) => r.title);
+}
+
+/** Stops every active subscription of this digest cadence; the address is erased if none is left. */
+export function stopDigests(ctx: Ctx, subscriberId: number, cadence: 'daily' | 'weekly'): number {
+  const { db } = ctx;
+  return transaction(db, () => {
+    const res = db.prepare("DELETE FROM subscriptions WHERE subscriber_id = ? AND cadence = ? AND status = 'active'").run(subscriberId, cadence);
+    db.prepare('DELETE FROM subscribers WHERE id = ? AND NOT EXISTS (SELECT 1 FROM subscriptions WHERE subscriber_id = ?)').run(subscriberId, subscriberId);
+    count(ctx, 'sub.stopped', Number(res.changes));
+    return Number(res.changes);
+  });
+}
+
 export function deleteSubscriber(ctx: Ctx, subscriberId: number): void {
+  const { n } = ctx.db.prepare('SELECT COUNT(*) AS n FROM subscriptions WHERE subscriber_id = ?').get(subscriberId) as { n: number };
   ctx.db.prepare('DELETE FROM subscribers WHERE id = ?').run(subscriberId);
+  count(ctx, 'sub.stopped', n);
 }
 
 export function setCadence(ctx: Ctx, subscriberId: number, subscriptionId: number, cadence: Cadence): void {
@@ -158,7 +186,7 @@ export async function requestManageLink(ctx: Ctx, rawEmail: string, ip: string):
   const subscriber = db.prepare("SELECT * FROM subscribers WHERE email = ? AND status = 'active'").get(email) as unknown as SubscriberRow | undefined;
   if (subscriber) {
     const token = signToken(config.secret, 'manage', subscriber.id, now + DAY);
-    await sendCounted(ctx, renderManageLinkMail(config, subscriber.locale, email, `${config.baseUrl}/m/${token}`));
+    sendInBackground(ctx, renderManageLinkMail(config, subscriber.locale, email, `${config.baseUrl}/m/${token}`));
   }
   return 'sent';
 }
@@ -178,9 +206,11 @@ export function handleMailEvent(ctx: Ctx, rawEmail: string, type: MailEventType)
   const now = ctx.now();
   if (type === 'soft_bounce') return;
   if (type === 'hard_bounce') {
-    db.prepare("UPDATE subscribers SET status = 'suspended', suspended_at = ?, suspended_reason = 'bounce' WHERE email = ?").run(now, email);
+    const res = db.prepare("UPDATE subscribers SET status = 'suspended', suspended_at = ?, suspended_reason = 'bounce' WHERE email = ? AND status = 'active'").run(now, email);
+    count(ctx, 'bounce.hard', Number(res.changes));
     return;
   }
+  if (type === 'complaint') count(ctx, 'complaint');
   transaction(db, () => {
     db.prepare('INSERT OR IGNORE INTO suppressions (email_hash, reason, created_at) VALUES (?, ?, ?)')
       .run(fingerprint(config.secret, email), type, now);

@@ -2,6 +2,7 @@
 // preview → request → confirmation email → confirmation → new entry → email → unsubscribe.
 
 import assert from 'node:assert/strict';
+import { flushSends } from '../src/mail/quota.ts';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
@@ -55,7 +56,9 @@ async function get(path: string): Promise<{ status: number; body: string; header
 async function post(path: string, form: Record<string, string> | string): Promise<{ status: number; body: string; headers: Headers }> {
   const body = typeof form === 'string' ? form : new URLSearchParams(form).toString();
   const r = await fetch(site + path, { method: 'POST', body, headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, redirect: 'manual' });
-  return { status: r.status, body: await r.text(), headers: r.headers };
+  const text = await r.text();
+  await flushSends();
+  return { status: r.status, body: text, headers: r.headers };
 }
 
 function pathOf(url: string): string {

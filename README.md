@@ -30,8 +30,15 @@ HTTPS proxy, all in Docker.
 - **Polite reading**: one read per feed whatever the number of subscribers, conditional
   requests, backoff, WebSub when the feed has a hub, and a `/robot` page for publishers.
 - **Deliverability**: DKIM signing, bounce handling through the bundled MTA, warm-up caps.
+- **One digest per reader**: digests due at the same time arrive as one email, a section per
+  feed.
+- **Dead feeds**: when a feed stops answering, its subscribers are told; it is retried daily and
+  resumes by itself, or the subscriptions end after 30 days.
 - **Publisher space**: a publisher proves a domain and gets their name and welcome text on
-  their feeds' subscribe pages, and subscriber counts (never below 5).
+  their feeds' subscribe pages, and subscriber counts (never below 5). `/publishers` prepares a
+  link or a button to paste, with no script.
+- **For the operator**: a setup checker (`doctor`), daily counters (`stats`), a daily report
+  and alerts by email.
 
 ## How it runs
 
@@ -78,6 +85,8 @@ in the email dropped into `data/outbox/`. Add `&lang=fr` for French.
 | `node src/cli.ts backup [keep]` | consistent copy of the database into `data/backups/`, keeping the last `keep` (14) |
 | `node src/cli.ts dkim-keygen` | creates the DKIM key (unless it exists) and prints the DNS record |
 | `node src/cli.ts bounce < message` | reads one bounce from standard input (manual use) |
+| `node src/cli.ts doctor` | checks settings, DNS (A, PTR, MX, SPF, DKIM, DMARC), port 25, HTTPS, Spamhaus |
+| `node src/cli.ts stats [days]` | counters per day (default 14): sent, bounces, complaints, subscriptions; current state |
 
 In Docker: `docker compose exec app node src/cli.ts <command>`.
 
@@ -97,6 +106,8 @@ lists them with example values.
 | `MTA_HOSTNAME`, `POSTMASTER_FORWARD` | — | this sending server's name (PTR/HELO); where postmaster@/abuse@ go |
 | `DKIM_SELECTOR`, `DKIM_KEY_FILE`, `DKIM_DOMAIN` | `fn1`, —, domain of `MAIL_FROM` | DKIM signing by the app |
 | `MAIL_MAX_PER_DAY`, `MAIL_MAX_PER_HOUR` | `0` (no cap) | warm-up caps; 10% kept for confirmation emails |
+| `CONFIRM_MAX_PER_HOUR` | `300` | confirmation emails per hour, all visitors together (0 = no ceiling) |
+| `OPS_EMAIL`, `OPS_REPORT_HOUR` | —, `8` | operator's address for the daily report and alerts |
 | `OPERATOR_NAME`, `CONTACT_EMAIL`, `PROCESSORS` | — | shown on the privacy page and in emails |
 | `LEGAL_*`, `HOST_*` | — | legal notice at `/legal`: publisher, registration, publication director, host |
 | `SOURCE_URL` | this repository | "Source code" link in every page footer (AGPL): point it to your copy if you change the code |
@@ -125,8 +136,11 @@ src/
   delivery.ts        immediate sends and digests, "at most once"
   cycle.ts           one round (read, then send), under a database lock
   purge.ts           GDPR erasure
-  publishers.ts      publisher space: sign-in, domain proofs, counts
+  deadfeeds.ts       telling subscribers when a feed stops answering
+  publishers.ts      publisher space: sign-in, domain proofs, counts, terms
   websub.ts          WebSub: hub subscription, verification, signed notifications
+  stats.ts, ops.ts   operator counters, daily report, alerts
+  doctor.ts          setup checker
   i18n/              en (reference) and fr message catalogs
   mail/              templates, SMTP sending with DKIM, sending caps, bounce parsing
   web/               HTTP server, pages without JavaScript, branding

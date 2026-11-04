@@ -110,6 +110,12 @@ same across moves to keep your data.
 
 ## 4. Check before sending to real people
 
+0. **The setup checker** goes through the settings, DNS (A, PTR, MX, SPF, DKIM, DMARC),
+   outbound port 25, HTTPS and the Spamhaus blocklist, and says what to fix:
+   ```sh
+   docker compose exec app node src/cli.ts doctor
+   ```
+   Run it again after every DNS change; everything should read `OK` before going further.
 1. **Relay test from outside**: an open-relay checker (MXToolbox "SMTP test") on
    `s1.example.org` must report no open relay. Only `feedback@`, `postmaster@` and `abuse@` of
    `mail.example.org` are accepted.
@@ -124,6 +130,21 @@ same across moves to keep your data.
    ```
 5. **Language**: `https://example.org/?lang=fr` shows French; a French browser gets it by
    default.
+
+## Keeping an eye on it
+
+Set `OPS_EMAIL` in `.env` to receive, every day at `OPS_REPORT_HOUR` (8:00 by default), a
+report with yesterday's and the week's numbers (emails sent, bounces, complaints, subscriptions,
+dead feeds) and what needs attention. Alerts come as soon as the day's hard bounces pass 5%,
+complaints 0.3%, or submissions start failing (the mail container may be down). The same
+numbers, any time:
+
+```sh
+docker compose exec app node src/cli.ts stats 30
+```
+
+An external uptime check on `https://example.org/health` covers the case where the whole server
+is down, which no email from it can report.
 
 ## Warm-up
 
@@ -188,3 +209,5 @@ cd /opt/feednotice && git pull && docker compose build && docker compose up -d
 | `docker compose exec mta postqueue -p` | mail waiting to go out |
 | `docker compose exec app node src/cli.ts poll` | one round now (the built-in scheduler already runs every minute) |
 | `docker compose exec app node src/cli.ts purge` | GDPR erasure now (runs hourly anyway) |
+| `docker compose exec app node src/cli.ts doctor` | checks DNS, mail and HTTPS against the settings |
+| `docker compose exec app node src/cli.ts stats [days]` | counters per day (default 14), and the current state |

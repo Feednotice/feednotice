@@ -11,7 +11,7 @@ import type { Ctx } from './context.ts';
 import { transaction } from './db.ts';
 import { fetchFeed } from './feed/fetch.ts';
 import type { Locale } from './i18n/index.ts';
-import { sendCounted } from './mail/quota.ts';
+import { sendInBackground } from './mail/quota.ts';
 import { renderPublisherLinkMail } from './mail/render.ts';
 import { allow, DAY, HOUR } from './ratelimit.ts';
 import { normalizeEmail } from './subscriptions.ts';
@@ -25,6 +25,8 @@ export interface PublisherRow {
   plan: 'free' | 'pro' | 'business';
   locale: Locale;
   created_at: number;
+  terms_version: number | null;
+  terms_accepted_at: number | null;
 }
 
 export interface DomainRow {
@@ -38,6 +40,10 @@ export interface DomainRow {
   failures: number;
   created_at: number;
 }
+
+/** Version of the terms of use; bump it (and TERMS_DATE) when they change. */
+export const TERMS_VERSION = 1;
+export const TERMS_DATE = Date.UTC(2026, 10, 4);
 
 export const MAX_DOMAINS = 10;
 export const NAME_MAX = 80;
@@ -84,13 +90,19 @@ export async function requestPublisherLink(ctx: Ctx, rawEmail: string, ip: strin
   if (!allow(db, `pub-ip:${fingerprint(config.secret, ip)}`, 20, HOUR, now)) return 'rate-limited';
   if (!allow(db, `pub-mail:${fingerprint(config.secret, email)}`, 3, HOUR, now)) return 'sent';
   const token = signEmailToken(config.secret, email, now + DAY);
-  await sendCounted(ctx, renderPublisherLinkMail(config, locale, email, `${config.baseUrl}/p/${token}`));
+  sendInBackground(ctx, renderPublisherLinkMail(config, locale, email, `${config.baseUrl}/p/${token}`));
   return 'sent';
 }
 
-/** Opening the link creates the account if needed: that click is the confirmation. */
+/**
+ * Opening the link creates the account if needed: that click is the confirmation. The link is
+ * only sent once the terms are accepted, so opening it records that acceptance.
+ */
 export function openPublisher(ctx: Ctx, email: string, locale: Locale): PublisherRow {
-  ctx.db.prepare('INSERT INTO publishers (email, locale, created_at) VALUES (?, ?, ?) ON CONFLICT (email) DO NOTHING').run(email, locale, ctx.now());
+  const now = ctx.now();
+  ctx.db.prepare(`INSERT INTO publishers (email, locale, created_at, terms_version, terms_accepted_at) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT (email) DO UPDATE SET terms_version = excluded.terms_version, terms_accepted_at = excluded.terms_accepted_at
+    WHERE publishers.terms_version IS NULL OR publishers.terms_version < excluded.terms_version`).run(email, locale, now, TERMS_VERSION, now);
   return ctx.db.prepare('SELECT * FROM publishers WHERE email = ?').get(email) as unknown as PublisherRow;
 }
 
@@ -130,7 +142,8 @@ export interface VerifyDeps {
 export function defaultVerifyDeps(ctx: Ctx): VerifyDeps {
   return {
     async fetchText(url) {
-      const res = await fetchFeed(url, { userAgent: ctx.config.userAgent, maxBytes: 4096, timeoutMs: 10_000, allowPrivate: ctx.config.allowPrivateFeeds });
+      // No redirect: the proof must be served by the domain itself.
+      const res = await fetchFeed(url, { userAgent: ctx.config.userAgent, maxBytes: 4096, timeoutMs: 10_000, maxRedirects: 0, allowPrivate: ctx.config.allowPrivateFeeds });
       return res.kind === 'ok' ? res.body : null;
     },
     async resolveTxt(name) {

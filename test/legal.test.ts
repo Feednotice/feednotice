@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { NO_BRAND } from '../src/web/brand.ts';
-import { legalPage, page } from '../src/web/views.ts';
+import { legalPage, page, termsPage } from '../src/web/views.ts';
 import { makeCtx } from './helpers.ts';
 
 const legal = {
@@ -47,5 +47,20 @@ describe('legal notice', () => {
     const html = legalPage(page(makeCtx().config, NO_BRAND, 'en', '/legal'));
     assert.doesNotMatch(html, /Registration:|<h2>Host<\/h2>/);
     assert.match(html, /Contact: contact@service\.test/);
+  });
+});
+
+describe('terms of use', () => {
+  const { config } = makeCtx({ operatorName: 'Exemple SAS', serviceName: 'Town Mail' });
+
+  it('names the service and its operator, with a part for publishers, in both languages', () => {
+    const en = termsPage(page(config, NO_BRAND, 'en', '/terms'));
+    assert.match(en, /<h1>Terms of use<\/h1>/);
+    assert.match(en, /Last updated: 4 November 2026\./);
+    assert.match(en, /Town Mail emails the new entries of Atom and RSS feeds[^<]*run by Exemple SAS/);
+    assert.match(en, /<h2>Publishers<\/h2>/);
+    const fr = termsPage(page(config, NO_BRAND, 'fr', '/terms'));
+    assert.match(fr, /<h1>Conditions d&#39;utilisation<\/h1>/);
+    assert.match(fr, /exploité par Exemple SAS/);
   });
 });

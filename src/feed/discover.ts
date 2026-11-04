@@ -14,18 +14,27 @@ const FEED_TYPES = /^application\/(atom|rss|rdf)\+xml$/i;
 /** Is this body an HTML page rather than an XML document? */
 export function looksLikeHtml(body: string, contentType: string): boolean {
   if (/\bx?html\b/i.test(contentType) && !/xml/i.test(contentType.replace(/xhtml/i, ''))) return true;
-  return /^\s*(<!--[\s\S]*?-->\s*)*<!doctype html|^\s*<html[\s>]/i.test(body);
+  // Leading comments skipped with indexOf: a regular expression for them backtracks exponentially.
+  let i = 0;
+  for (;;) {
+    while (i < body.length && /\s/.test(body[i])) i++;
+    if (!body.startsWith('<!--', i)) break;
+    const end = body.indexOf('-->', i + 4);
+    if (end === -1) return false;
+    i = end + 3;
+  }
+  return /^(<!doctype html|<html[\s>])/i.test(body.slice(i, i + 20));
 }
 
 export function discoverFeeds(html: string, pageUrl: string): DiscoveredFeed[] {
   // Only the <head> matters, and a page can be huge.
   const head = html.slice(0, 256 * 1024).split(/<\/head\s*>/i)[0];
-  const base = /<base\b[^>]*\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i.exec(head)?.[1];
+  const base = /<base\b[^<>]*\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i.exec(head)?.[1];
   const baseUrl = (base ? absoluteUrl(unquote(base), pageUrl) : null) ?? pageUrl;
 
   const found: DiscoveredFeed[] = [];
   const seen = new Set<string>();
-  for (const [tag] of head.matchAll(/<link\b[^>]*>/gi)) {
+  for (const [tag] of head.matchAll(/<link\b[^<>]*>/gi)) {
     const attrs = attributes(tag);
     const rel = (attrs.rel ?? '').toLowerCase().split(/\s+/);
     if (!rel.includes('alternate') || !FEED_TYPES.test((attrs.type ?? '').trim())) continue;

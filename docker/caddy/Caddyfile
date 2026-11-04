@@ -3,5 +3,8 @@
 {$SITE_DOMAIN} {
 	encode gzip
 	header -Server
+	# The hooks are for the mta container, on the internal network: not reachable from outside.
+	# (To receive a provider's webhooks at /hooks/mail-events, remove this line.)
+	respond /hooks/* 404
 	reverse_proxy app:8080
 }

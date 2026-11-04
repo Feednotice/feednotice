@@ -46,10 +46,10 @@ documentation, not legal advice.
 | Item | Content |
 |---|---|
 | Purpose | Letting a publisher prove they control a domain, customize the subscribe page of its feeds, and see subscriber numbers |
-| Legal basis | Performance of a contract (your publisher terms of use) [write them before opening the space publicly] |
+| Legal basis | Performance of a contract: the terms of use, served at `/terms`, accepted on the sign-in form [review them for your deployment] |
 | Data subjects | People who open a publisher space |
-| Data | Contact email address; the name and welcome text they write; their domains, verification tokens and dates; language; plan |
-| Not shown to them | Any subscriber address; any count below 5 |
+| Data | Contact email address; the name and welcome text they write; their domains, verification tokens and dates; language; plan; the version of the terms accepted, and when |
+| Not shown to them | Any subscriber address; any count below 5, nor a split per cadence that would reveal one |
 | Recipients | The operator and its processor [hosting provider] |
 | Retention | Until the publisher deletes the space (button in the space); accounts that never verify a domain are erased 30 days after creation (`src/publishers.ts`). The sign-in link request stores nothing: the account is created only when the link is opened |
 
@@ -97,6 +97,8 @@ To set at deployment in `.env`:
 | Address that complained | Erased immediately; fingerprint kept | `handleMailEvent()` |
 | Delivery records (which subscription got which entry) | 30 days | `src/purge.ts` |
 | Rate-limit and sending-cap counters | 2 days | `src/purge.ts` |
+| Operator counters (`stats_daily`: numbers per day, no address, not personal data) | 400 days | `src/purge.ts` |
+| Subscriptions to a dead feed | Ended 30 days after the feed is declared dead (subscribers are told); a lone address is then erased | `src/purge.ts` |
 | Feeds and entries (public data, not personal) | While a subscription exists | `src/purge.ts` |
 | Mail queue (messages waiting to be delivered) | At most 2 days (`maximal_queue_lifetime`) | `docker/mta/entrypoint.sh` |
 | Backups | 14 copies, one a day (`backup 14`): an erased address disappears from backups within 14 days | [off-site copy: keep the same retention] |
@@ -106,11 +108,13 @@ To set at deployment in `.env`:
 - **Links**, all signed with HMAC-SHA256:
   - confirmation: valid 7 days;
   - account: valid 24 hours;
-  - unsubscribe: no expiry, so it always works.
+  - unsubscribe, for one feed or a whole digest: no expiry, so it always works.
   - Identifiers are never reused, so an old link cannot touch someone else's subscription.
 - **Pages**: no script, no cookie, strict content security policy, `Referrer-Policy: no-referrer`
   so tokens do not leak to linked sites.
-- **Answers**: the same whether or not an address is subscribed.
+- **Answers**: the same whether or not an address is subscribed, in content and in time (emails
+  are sent in the background).
+- **Operator's report and alerts** (`OPS_EMAIL`): counts only, never an address.
 - **Containers**: the app runs as an unprivileged user; the SQLite database lives in a Docker
   volume; `.env` (secrets) is readable by root only.
 - **Mail server**: not an open relay; the submission port is reachable only on the internal

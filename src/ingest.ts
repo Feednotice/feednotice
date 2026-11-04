@@ -28,7 +28,11 @@ export function sha(s: string): string {
 
 /** http vs https and a trailing slash never distinguish two entries. */
 export function normalizeId(id: string): string {
-  return id.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  const s = id.trim().replace(/^https?:\/\//i, '');
+  // Trailing slashes, without a regular expression (/\/+$/ is quadratic on long runs of "/").
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
+  return s.slice(0, end);
 }
 
 export function entryKeys(e: ParsedEntry): { key: string; linkTitle: string; content: string } {

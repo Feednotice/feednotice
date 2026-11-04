@@ -41,8 +41,13 @@ services:
     logging: *logging
     restart: unless-stopped
     hostname: ${MTA_HOSTNAME}
-    env_file: ${ENV_FILE:-.env}
+    # Only what Postfix needs: SECRET, which signs every link, stays with the app.
     environment:
+      MTA_HOSTNAME: ${MTA_HOSTNAME}
+      BOUNCE_ADDRESS: ${BOUNCE_ADDRESS}
+      POSTMASTER_FORWARD: ${POSTMASTER_FORWARD}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      MTA_INET_PROTOCOLS: ${MTA_INET_PROTOCOLS:-ipv4}
       APP_URL: http://app:8080
       MTA_TRUSTED_NETWORKS: 172.30.0.0/24
     ports:

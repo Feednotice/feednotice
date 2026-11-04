@@ -47,6 +47,8 @@ postconf -e \
 # Port 25, open to the Internet: never relays, whoever connects (Docker may present outside
 # clients with an internal address). Only mail for relay_domains (the bounce address) is taken.
 postconf -P "smtp/inet/smtpd_relay_restrictions=reject_unauth_destination"
+# A bounce is small: larger messages are refused at the door, never queued.
+postconf -P "smtp/inet/message_size_limit=1048576"
 # Port 2525, internal network only (not published): submission by the application.
 postconf -M "2525/inet=2525 inet n - n - - smtpd"
 postconf -P \
@@ -65,10 +67,15 @@ if [ ! -f /etc/postfix/tls/cert.pem ]; then
   chmod 600 /etc/postfix/tls/key.pem
 fi
 
-# Secret for the bounce hook, readable only by the pipe's user.
-printf "WEBHOOK_SECRET='%s'\nAPP_URL='%s'\n" "$WEBHOOK_SECRET" "$APP_URL" > /etc/forward-bounce.env
-chown nobody /etc/forward-bounce.env
-chmod 400 /etc/forward-bounce.env
+# curl configuration for the bounce hook, readable only by the pipe's user: the secret never
+# appears on a command line. Values are quoted for curl (backslashes and quotes escaped).
+quote() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+{
+  printf 'url = "%s/hooks/bounce"\n' "$(quote "$APP_URL")"
+  printf 'header = "Authorization: Bearer %s"\n' "$(quote "$WEBHOOK_SECRET")"
+} > /etc/forward-bounce.curl
+chown nobody /etc/forward-bounce.curl
+chmod 400 /etc/forward-bounce.curl
 
 postfix check
 exec postfix start-fg

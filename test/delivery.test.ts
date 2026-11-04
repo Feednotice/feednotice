@@ -179,6 +179,6 @@ describe('erasure', () => {
     ctx.clock.t += 6 * DAY;
     assert.equal(purge(ctx).subscribers, 0);
     ctx.clock.t += DAY + HOUR;
-    assert.deepEqual(purge(ctx), { publishers: 0, pendingSubscriptions: 1, subscribers: 1, feeds: 1 });
+    assert.deepEqual(purge(ctx), { publishers: 0, pendingSubscriptions: 1, subscribers: 1, feeds: 1, deadFeedSubscriptions: 0 });
   });
 });

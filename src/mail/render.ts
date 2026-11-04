@@ -63,8 +63,18 @@ function listHeaders(config: Config, feed: FeedRow, subscriptionId: number): Rec
   };
 }
 
+/**
+ * Text from a feed going into a header (sender name, subject): invisible and control
+ * characters removed, and anything looking like an encoded word (=?…?=), which some mail apps
+ * would decode into a fake address.
+ */
+export function headerText(s: string): string {
+  return s.replace(/\s+/g, ' ').replace(/[\p{Cc}\p{Cf}]/gu, '').replace(/=\?[^?\s]*\?[bq]\?[^?\s]*\?=/gi, '').replace(/[<>"]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/** "Feed via Service": the feed's part kept short, so the service's name always shows. */
 function fromName(config: Config, locale: Locale, feed: FeedRow): string {
-  return messages(locale).mail.via(truncate(feed.title, 50), config.serviceName);
+  return messages(locale).mail.via(truncate(headerText(feed.title), 30), config.serviceName);
 }
 
 export function renderEntryMail(config: Config, locale: Locale, feed: FeedRow, entry: EntryRow, to: string, subscriptionId: number): OutgoingMail {
@@ -83,7 +93,7 @@ ${f.html}`);
   return {
     to,
     fromName: fromName(config, locale, feed),
-    subject: truncate(entry.title || feed.title, 150),
+    subject: truncate(headerText(entry.title || feed.title), 150),
     text,
     html,
     headers: listHeaders(config, feed, subscriptionId),
@@ -118,9 +128,88 @@ ${f.html}`);
   return {
     to,
     fromName: fromName(config, locale, feed),
-    subject: kind === 'burst' ? `${m.count(n)} — ${truncate(feed.title, 100)}` : `${heading} (${m.count(n)}) — ${truncate(feed.title, 80)}`,
+    subject: kind === 'burst' ? `${m.count(n)} — ${truncate(headerText(feed.title), 100)}` : `${heading} (${m.count(n)}) — ${truncate(headerText(feed.title), 80)}`,
     text,
     html,
+    headers: listHeaders(config, feed, subscriptionId),
+  };
+}
+
+export function stopDigestUrl(config: Config, subscriberId: number, cadence: Exclude<DigestKind, 'burst'>): string {
+  return `${config.baseUrl}/u/${cadence}/${signToken(config.secret, cadence === 'daily' ? 'stop-daily' : 'stop-weekly', subscriberId)}`;
+}
+
+/** One digest gathering several feeds: a section per feed, each with its own unsubscribe link. */
+export function renderMergedDigestMail(
+  config: Config, locale: Locale, sections: { subscriptionId: number; feed: FeedRow; entries: EntryRow[] }[],
+  to: string, subscriberId: number, kind: Exclude<DigestKind, 'burst'>,
+): OutgoingMail {
+  const msg = messages(locale);
+  const m = msg.mail;
+  const n = sections.reduce((sum, s) => sum + s.entries.length, 0);
+  const heading = m.digestHeading[kind];
+  const stop = stopDigestUrl(config, subscriberId, kind);
+  const manage = `${config.baseUrl}/account?lang=${locale}`;
+  const blocks = sections.map((s) => ({
+    ...s,
+    unsub: unsubscribeUrl(config, s.subscriptionId),
+    items: s.entries.map((e) => ({ e, date: formatDate(locale, config.timeZone, e.published_at), summary: truncate(e.summary, 300), link: entryLink(e, s.feed) })),
+  }));
+  const text = [
+    heading,
+    '',
+    ...blocks.flatMap((b) => [
+      `== ${b.feed.title} ==`,
+      '',
+      ...b.items.flatMap((i) => [`* ${i.e.title}`, ...(i.date ? [`  ${i.date}`] : []), ...(i.summary ? [indent(i.summary)] : []), `  ${i.link}`, '']),
+      `${msg.label(m.mergedUnsubscribeFeed)} ${b.unsub}`,
+      '',
+    ]),
+    '-- ',
+    m.mergedWhy(sections.length, kind),
+    `${msg.label(m.mergedStop(kind))} ${stop}`,
+    `${msg.label(m.footerManage)} ${manage}`,
+    m.footerNoTracking(config.serviceName),
+  ].join('\n');
+  const html = htmlPage(locale, `<h1 style="font-size: 22px;">${esc(heading)}</h1>
+${blocks.map((b) => `<h2 style="font-size: 20px; margin-top: 1.6em; border-bottom: 1px solid #ccc;">${esc(b.feed.title)}</h2>
+${b.items.map((i) => `<h3 style="font-size: 17px; margin-bottom: 0.2em;"><a href="${esc(i.link)}">${esc(i.e.title)}</a></h3>
+${i.date ? `<p style="color: #555; margin-top: 0;">${esc(i.date)}</p>` : ''}
+${i.summary ? htmlParagraphs(i.summary) : ''}`).join('\n')}
+<p style="font-size: 14px;"><a href="${esc(b.unsub)}">${esc(m.mergedUnsubscribeFeed)}</a></p>`).join('\n')}
+<hr style="border: 0; border-top: 1px solid #ccc; margin-top: 2em;">
+<p style="font-size: 14px; color: #555;">${esc(m.mergedWhy(sections.length, kind))}<br>
+<a href="${esc(stop)}">${esc(m.mergedStop(kind))}</a> · <a href="${esc(manage)}">${esc(m.footerManage)}</a><br>
+${esc(m.footerNoTracking(config.serviceName))}</p>`);
+  const host = new URL(config.baseUrl).hostname;
+  return {
+    to,
+    fromName: config.serviceName,
+    subject: m.mergedSubject(kind, n, sections.length),
+    text,
+    html,
+    headers: {
+      'List-Unsubscribe': `<${stop}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      'List-Id': `<digest-${kind}.${host}>`,
+    },
+  };
+}
+
+/** The feed no longer answers: what happens next, and how to stop now. */
+export function renderDeadFeedMail(config: Config, locale: Locale, feed: FeedRow, to: string, subscriptionId: number, endsAt: number): OutgoingMail {
+  const msg = messages(locale);
+  const m = msg.mail;
+  const since = formatDate(locale, config.timeZone, feed.last_success_at ?? feed.created_at);
+  const until = formatDate(locale, config.timeZone, endsAt);
+  const f = footer(config, locale, feed, subscriptionId);
+  const paragraphs = m.deadBody({ feed: feed.title, url: feed.url, since, until });
+  return {
+    to,
+    fromName: fromName(config, locale, feed),
+    subject: m.deadSubject(truncate(headerText(feed.title), 100)),
+    text: [...paragraphs.flatMap((p) => [p, '']), f.text].join('\n'),
+    html: htmlPage(locale, `${paragraphs.map((p) => `<p>${esc(p)}</p>`).join('\n')}\n${f.html}`),
     headers: listHeaders(config, feed, subscriptionId),
   };
 }
@@ -130,7 +219,7 @@ export function renderConfirmationMail(config: Config, locale: Locale, feed: Fee
   return {
     to,
     fromName: config.serviceName,
-    subject: msg.mail.confirmSubject(truncate(feed.title, 80)),
+    subject: msg.mail.confirmSubject(hostOf(feed.url)),
     text: msg.mail.confirmBody({
       feed: feed.title, url: feed.url, cadence: msg.cadence[cadence], link: confirmUrl, days: config.pendingTtlDays,
       service: config.serviceName, baseUrl: config.baseUrl, contact: config.contactEmail,
@@ -144,7 +233,7 @@ export function renderAlreadySubscribedMail(config: Config, locale: Locale, feed
   return {
     to,
     fromName: config.serviceName,
-    subject: m.alreadySubject(truncate(feed.title, 80)),
+    subject: m.alreadySubject(hostOf(feed.url)),
     text: m.alreadyBody({ feed: feed.title, manage: `${config.baseUrl}/account?lang=${locale}`, service: config.serviceName, baseUrl: config.baseUrl }),
     headers: { 'Auto-Submitted': 'auto-generated' },
   };

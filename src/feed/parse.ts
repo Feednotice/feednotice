@@ -3,7 +3,7 @@
 
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { parseDate } from './dates.ts';
-import { decodeEntities, htmlToText, normalizeWhitespace, singleLine } from './text.ts';
+import { decodeEntities, htmlToText, MAX_HTML, normalizeWhitespace, singleLine } from './text.ts';
 
 export type FeedFormat = 'atom' | 'rss' | 'rdf';
 
@@ -120,7 +120,7 @@ function parseRss(c: Node, base: string, warnings: string[]): ParsedFeed {
   const atomLinks = [...asArray(c['atom:link']), ...asArray(c['atom10:link'])].filter(isNode);
   return {
     format: 'rss',
-    title: singleLine(textOf(c.title)),
+    title: singleLine(textOf(c.title).slice(0, MAX_SHORT_TEXT)),
     description: contentText(c.description),
     siteUrl: absoluteUrl(firstText(c.link), base),
     selfUrl: pickLink(atomLinks, 'self', base),
@@ -146,7 +146,7 @@ function parseRdf(r: Node, base: string, warnings: string[]): ParsedFeed {
   const items = asArray(r.item).filter(isNode);
   return {
     format: 'rdf',
-    title: singleLine(textOf(c.title)),
+    title: singleLine(textOf(c.title).slice(0, MAX_SHORT_TEXT)),
     description: contentText(c.description),
     siteUrl: absoluteUrl(firstText(c.link), base),
     selfUrl: null,
@@ -189,20 +189,24 @@ function firstText(v: unknown): string | null {
   return null;
 }
 
+/** Longest identifier or title kept: beyond, a feed is either broken or hostile. */
+const MAX_SHORT_TEXT = 2048;
+
 function cleanId(s: string | null): string | null {
-  const t = s?.trim();
+  const t = s?.slice(0, MAX_SHORT_TEXT).trim();
   return t ? t : null;
 }
 
 /** Atom text construct: type="text" (default), "html" or "xhtml". */
 function textConstruct(v: unknown): string {
   const type = isNode(v) ? v['@_type'] : undefined;
-  const t = textOf(v);
+  const t = textOf(v).slice(0, MAX_SHORT_TEXT);
   return type === 'html' || type === 'xhtml' ? singleLine(htmlToText(t)) : singleLine(t);
 }
 
 /** RSS titles often contain escaped HTML: strip it. */
-function htmlTitle(s: string): string {
+function htmlTitle(raw: string): string {
+  const s = raw.slice(0, MAX_SHORT_TEXT);
   return singleLine(/[<&]/.test(s) ? htmlToText(s) : s);
 }
 
@@ -213,7 +217,7 @@ function htmlTitle(s: string): string {
 function contentText(v: unknown): string {
   if (v === undefined || v === null) return '';
   const type = isNode(v) ? v['@_type'] : undefined;
-  const raw = textOf(v);
+  const raw = textOf(v).slice(0, MAX_HTML);
   if (!raw) return '';
   if (type === 'xhtml') return htmlToText(raw);
   const decoded = raw

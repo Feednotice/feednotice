@@ -26,7 +26,7 @@ export const fr: Messages = {
   langName: 'Français',
   label: (label) => `${label} :`,
 
-  nav: { privacy: 'Vos données', account: 'Mes abonnements', publishers: 'Éditeurs', robot: 'Le robot', legal: 'Mentions légales', source: 'Code source' },
+  nav: { privacy: 'Vos données', account: 'Mes abonnements', publishers: 'Éditeurs', robot: 'Le robot', legal: 'Mentions légales', terms: "Conditions d'utilisation", source: 'Code source' },
   languageSwitch: 'Langue',
 
   cadence: {
@@ -44,8 +44,33 @@ export const fr: Messages = {
     `Beaucoup de sites publient un flux Atom ou RSS : la liste de leurs dernières publications. ${service} vous les envoie par courriel, au rythme que vous choisissez. Pas de compte, pas de mot de passe, pas de publicité, pas de pistage.`,
   feedUrlLabel: 'Adresse du flux ou du site',
   feedUrlButton: 'Voir ce flux',
-  homePublishersPrefix: 'Vous publiez un site ? Mettez un lien « Recevoir par courriel » à côté de votre flux :',
-  homePublishersLink: 'voici comment',
+  home: {
+    stepsHeading: 'Comment ça marche',
+    steps: [
+      "Collez l'adresse d'un flux, ou simplement d'un site : ses flux sont trouvés pour vous. Beaucoup de sites proposent aussi un lien « Recevoir les nouveautés par courriel ».",
+      "Donnez votre adresse et choisissez le rythme : un courriel par nouveauté, ou un récapitulatif quotidien ou hebdomadaire, à l'heure qui vous convient.",
+      'Confirmez depuis le courriel reçu. Ensuite, chaque courriel contient un lien de désabonnement en un clic.',
+    ],
+    promisesHeading: 'Ce sur quoi vous pouvez compter',
+    promises: [
+      'Gratuit pour les lecteurs, sans publicité dans les courriels.',
+      'Aucun pistage : ni pixel, ni lien réécrit, ni cookie. Les courriels se lisent pareil sans images.',
+      "Votre adresse ne sert qu'à ces envois, n'est jamais partagée et est effacée dès que vous arrêtez votre dernier abonnement.",
+      'Plusieurs récapitulatifs à la même heure arrivent en un seul courriel, une partie par site.',
+      "Si un site arrête son flux, vous êtes prévenu au lieu d'attendre pour rien.",
+    ],
+    publishersHeading: 'Vous publiez un site ?',
+    publishersText: (service) =>
+      `Permettez à vos lecteurs de vous suivre par courriel avec un simple lien à côté de votre flux : pas de script, pas de compte, pas de liste à gérer. ${service} lit votre flux poliment, une fois quel que soit le nombre d'abonnés, et dans la minute s'il annonce un hub WebSub.`,
+    publishersCta: 'Obtenir le lien ou un bouton',
+    faqHeading: 'Questions',
+    faq: [
+      { q: "Qu'est-ce qu'un flux ?", a: "La liste des dernières publications d'un site, publiée à une adresse lisible par des programmes (Atom ou RSS). La plupart des blogs, des sites d'information et beaucoup d'organismes publics en ont un, souvent signalé par une icône orange." },
+      { q: "Je ne trouve pas l'adresse du flux.", a: "Collez plutôt l'adresse du site : s'il annonce un flux, il est trouvé pour vous." },
+      { q: 'Faut-il un compte ?', a: 'Non. Vos abonnements sont accessibles par un lien envoyé à votre adresse, valable 24 heures, chaque fois que vous le demandez.' },
+      { q: 'Comment arrêter ?', a: "Avec le lien en bas de n'importe quel courriel, en un clic, ou depuis « Mes abonnements », où vous pouvez aussi effacer votre adresse." },
+    ],
+  },
 
   subscribeTitle: (feed) => `S'abonner à ${feed}`,
   feedLabel: 'Flux',
@@ -60,6 +85,8 @@ export const fr: Messages = {
   subscribeNotice: (days) =>
     `Vous allez recevoir un courriel avec un lien de confirmation. Tant que vous n'aurez pas cliqué dessus, rien d'autre ne vous sera envoyé, et votre adresse sera effacée au bout de ${days} jours. Votre adresse ne sert qu'à ces envois :`,
   privacyLink: 'ce que nous en faisons',
+  subscribeTerms: "En vous abonnant, vous acceptez les",
+  termsLink: "conditions d'utilisation",
 
   feedErrorTitle: 'Flux illisible',
   feedErrorHeading: 'Ce flux ne peut pas être lu',
@@ -110,6 +137,13 @@ export const fr: Messages = {
   unsubscribedText: "Vous ne recevrez plus rien pour ce flux. Si c'était votre dernier abonnement, votre adresse a été effacée.",
   unsubscribedNote: "Une erreur ? Il suffit de vous abonner à nouveau depuis le site d'origine.",
 
+  stopDigestTitle: (kind) => (kind === 'daily' ? 'Arrêter le récapitulatif quotidien' : 'Arrêter le récapitulatif hebdomadaire'),
+  stopDigestText: (kind, n) =>
+    `Arrêter le récapitulatif ${kind === 'daily' ? 'quotidien' : 'hebdomadaire'} ? Il regroupe ${n === 1 ? '1 flux' : `${n} flux`} :`,
+  stopDigestButton: 'Arrêter ce récapitulatif',
+  stopDigestOther: "Vos autres abonnements ne changent pas. Pour n'arrêter qu'un flux, utilisez le lien sous ce flux dans le courriel, ou :",
+  stoppedDigestText: "Vous ne recevrez plus ce récapitulatif. S'il contenait vos derniers abonnements, votre adresse a été effacée.",
+
   accountTitle: 'Mes abonnements',
   accountRequestText: 'Pas de mot de passe : donnez votre adresse, vous recevrez un lien valable 24 heures qui ouvre votre espace.',
   accountRequestButton: 'Recevoir le lien',
@@ -143,6 +177,12 @@ export const fr: Messages = {
   publishersButtonHeading: 'Ou un bouton',
   publishersLinkText: 'Recevoir les nouveautés par courriel',
   publishersTry: 'Essayer :',
+  publishersReadersLabel: 'Langue de vos lecteurs',
+  publishersReadersAuto: 'leur navigateur décide',
+  publishersColorLabel: 'Couleur du bouton',
+  publishersPreview: 'Aperçu :',
+  publishersCopy: "Copiez ce code dans votre page. Il ne contient aucun script et ne charge rien : vos lecteurs ne sont pistés ni par vous ni par nous.",
+  publishersButtonCode: 'Code du bouton',
   publishersTipsHeading: 'Ce que votre flux gagne à contenir',
   publishersTips: (service, minutes) => [
     "un identifiant stable par entrée (<id> en Atom, <guid> en RSS) : c'est lui qui évite les envois en double ;",
@@ -156,6 +196,8 @@ export const fr: Messages = {
   publisherSignInHeading: 'Espace éditeur',
   publisherSignInText: "Vérifiez votre domaine pour afficher votre nom et un texte d'accueil sur la page d'abonnement de vos flux, et voir combien de personnes les suivent. Pas de mot de passe : nous vous envoyons un lien.",
   publisherSignInButton: 'Recevoir un lien de connexion',
+  publisherTermsLabel: "J'ai lu et j'accepte les conditions d'utilisation, y compris la partie consacrée aux éditeurs",
+  publisherTermsRequired: "Acceptez les conditions d'utilisation pour ouvrir un espace éditeur.",
   publisherSentText: 'Un lien de connexion, valable 24 heures, vient de partir à cette adresse.',
   publisherTitle: 'Espace éditeur',
   publisherSignedIn: (email, plan) => `Connecté en tant que ${email} · offre ${plan}`,
@@ -242,6 +284,63 @@ export const fr: Messages = {
     },
   ],
 
+  termsTitle: "Conditions d'utilisation",
+  termsUpdated: (date) => `Dernière mise à jour : ${date}.`,
+  termsSections: (p) => [
+    {
+      heading: 'Le service',
+      paragraphs: [
+        `${p.service} envoie par courriel les nouveautés de flux Atom et RSS aux personnes qui les demandent. Il est exploité par ${p.operator} (voir les mentions légales). Recevoir les nouveautés est gratuit.`,
+        "Utiliser le service vaut acceptation de ces conditions. Si vous ne les acceptez pas, ne l'utilisez pas.",
+      ],
+    },
+    {
+      heading: "S'abonner",
+      items: [
+        "N'abonnez que des adresses qui sont les vôtres ou que vous êtes autorisé à utiliser. Chaque abonnement doit être confirmé depuis l'adresse elle-même.",
+        "Vous pouvez à tout moment changer le rythme d'un flux, l'arrêter ou effacer votre adresse : depuis n'importe quel courriel, ou depuis « Mes abonnements ».",
+        "N'utilisez pas le service pour envoyer des demandes en masse, inonder une adresse ou contourner ses limites. Les demandes qui ressemblent à un abus peuvent être refusées et leur auteur bloqué.",
+      ],
+    },
+    {
+      heading: 'Contenus',
+      paragraphs: [
+        `Les flux appartiennent à leurs éditeurs. ${p.service} reprend leurs titres, résumés et liens tels quels, sans les vérifier ni les modifier, et n'en est pas responsable, pas plus que des sites vers lesquels ils mènent.`,
+        `Pour signaler un contenu illicite, écrivez à ${p.contact} : le flux peut être suspendu pour tous.`,
+      ],
+    },
+    {
+      heading: 'Éditeurs',
+      paragraphs: ['Ces points concernent quiconque ouvre un espace éditeur.'],
+      items: [
+        "Ne vérifiez que des domaines que vous contrôlez ou que vous êtes autorisé à représenter. Le domaine revient à qui l'a prouvé en dernier ; une preuve qui disparaît est perdue.",
+        "Le nom et le texte d'accueil montrés aux lecteurs doivent être exacts et licites, ne pas usurper l'identité de quiconque ni faire de publicité pour des tiers. Ils peuvent être retirés sinon.",
+        "Les nombres d'abonnés sont donnés à titre indicatif, tels quels ; ceux inférieurs à cinq ne sont pas affichés. Vous ne voyez jamais les adresses des abonnés et ne devez pas chercher à les identifier.",
+        "Vous pouvez supprimer votre espace éditeur à tout moment. Un espace qui ne vérifie aucun domaine est supprimé après 30 jours.",
+        "Si des offres payantes sont proposées, leur prix et leurs conditions sont indiqués avant toute souscription.",
+      ],
+    },
+    {
+      heading: 'Disponibilité',
+      paragraphs: [
+        "Le service est fourni en l'état. Il fait de son mieux pour livrer chaque nouveauté une fois et à temps, sans pouvoir le garantir : un flux peut être indisponible, un courriel retardé ou filtré par la messagerie du destinataire.",
+        "Le service peut évoluer ou s'arrêter. S'il s'arrête, abonnés et éditeurs en sont prévenus par courriel à l'avance lorsque c'est possible.",
+      ],
+    },
+    {
+      heading: 'Données personnelles',
+      paragraphs: ['Ce qui est collecté, pourquoi, combien de temps, et vos droits : voir « Vos données ».'],
+    },
+    {
+      heading: 'Évolution de ces conditions',
+      paragraphs: ["Ces conditions peuvent évoluer. La date ci-dessus indique la dernière version. Les éditeurs acceptent la version en vigueur à chaque demande de lien de connexion ; les changements importants sont annoncés par courriel."],
+    },
+    {
+      heading: 'Droit applicable',
+      paragraphs: [`Ces conditions sont régies par le droit du pays où ${p.operator} est établi (voir les mentions légales). Questions : ${p.contact}.`],
+    },
+  ],
+
   privacyTitle: 'Vos données',
   privacySections: (p) => [
     { heading: 'Qui est responsable', paragraphs: [`${p.operator}, que vous pouvez joindre à ${p.contact}.`] },
@@ -299,7 +398,19 @@ export const fr: Messages = {
     footerNoTracking: (service) => `${service} ne suit ni l'ouverture de ses courriels ni les clics sur leurs liens.`,
     digestHeading: { daily: 'Les nouveautés du jour', weekly: 'Les nouveautés de la semaine', burst: (n) => `${n} nouveautés d'un coup` },
     count: (n) => (n === 1 ? '1 nouveauté' : `${n} nouveautés`),
-    confirmSubject: (feed) => `Confirmez votre abonnement à « ${feed} »`,
+    deadSubject: (feed) => `« ${feed} » ne répond plus`,
+    deadBody: (p) => [
+      `Bonjour,`,
+      `Le flux « ${p.feed} » (${p.url}) ne répond plus depuis le ${p.since} : son site l'a peut-être déplacé ou fermé. Vous ne recevrez pas ses nouveautés tant qu'il restera muet.`,
+      `Il est encore vérifié une fois par jour. S'il revient, vos envois reprennent d'eux-mêmes. Sinon, cet abonnement prend fin le ${p.until} et, si c'était le dernier, votre adresse est effacée. Vous n'avez rien à faire.`,
+      `Si le site publie désormais son flux à une autre adresse, abonnez-vous à la nouvelle depuis le site.`,
+    ],
+    mergedSubject: (kind, n, feeds) =>
+      `Votre récapitulatif ${kind === 'daily' ? 'du jour' : 'de la semaine'} : ${n === 1 ? '1 nouveauté' : `${n} nouveautés`} de ${feeds} flux`,
+    mergedUnsubscribeFeed: 'Se désabonner de ce flux',
+    mergedWhy: (feeds, kind) => `Vous recevez ce récapitulatif ${kind === 'daily' ? 'quotidien' : 'hebdomadaire'} parce que cette adresse est abonnée à ces ${feeds} flux.`,
+    mergedStop: (kind) => `Arrêter ce récapitulatif ${kind === 'daily' ? 'quotidien' : 'hebdomadaire'}`,
+    confirmSubject: (host) => `Confirmez votre abonnement aux nouveautés de ${host}`,
     confirmBody: (p) => `Bonjour,
 
 Quelqu'un — vous, sans doute — a demandé à recevoir par courriel les nouveautés de :
@@ -319,7 +430,7 @@ et votre adresse sera effacée dans ${p.days} jours.
 --
 ${p.service} — ${p.baseUrl}
 Contact : ${p.contact}`,
-    alreadySubject: (feed) => `Vous êtes déjà abonné à « ${feed} »`,
+    alreadySubject: (host) => `Vous êtes déjà abonné aux nouveautés de ${host}`,
     alreadyBody: (p) => `Bonjour,
 
 Une nouvelle demande d'abonnement aux nouveautés de « ${p.feed} » a été faite

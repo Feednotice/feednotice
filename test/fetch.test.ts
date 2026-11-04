@@ -4,6 +4,9 @@ import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 import zlib from 'node:zlib';
 import { decodeBody, fetchFeed, isPublicAddress } from '../src/feed/fetch.ts';
+import { looksLikeHtml } from '../src/feed/discover.ts';
+import { htmlToText } from '../src/feed/text.ts';
+import { normalizeId } from '../src/ingest.ts';
 
 const UA = 'FeedNotice-test/0 (+https://service.test/robot)';
 let base = '';
@@ -35,6 +38,20 @@ const server = http.createServer((req, res) => {
   if (url === '/busy') { res.writeHead(503, { 'Retry-After': '120' }); return res.end(); }
   if (url === '/gone') { res.writeHead(410); return res.end(); }
   if (url === '/slow') { setTimeout(() => res.end('<rss/>'), 500); return; }
+  if (url === '/bad-location') { res.writeHead(302, { Location: 'http://[' }); return res.end(); }
+  if (url === '/drip') {
+    // One byte every 50 ms: never silent long enough for an idle timeout.
+    res.writeHead(200);
+    const t = setInterval(() => res.write('<'), 50);
+    res.on('close', () => clearInterval(t));
+    return;
+  }
+  if (url === '/gzip-cut') {
+    res.writeHead(200, { 'Content-Encoding': 'gzip' });
+    res.write(zlib.gzipSync(Buffer.alloc(100_000, 'a')).subarray(0, 200));
+    setTimeout(() => res.destroy(), 50);
+    return;
+  }
   res.writeHead(404);
   res.end();
 });
@@ -87,6 +104,17 @@ describe('fetching feeds', () => {
     assert.ok(slow.kind === 'error' && slow.code === 'timeout');
   });
 
+  it('survives hostile servers: bad redirect, dripping body, cut compressed body', async () => {
+    const bad = await fetchFeed(`${base}/bad-location`, { userAgent: UA, allowPrivate: true });
+    assert.equal(bad.kind === 'error' && bad.code, 'invalid-url');
+    const started = Date.now();
+    const drip = await fetchFeed(`${base}/drip`, { userAgent: UA, allowPrivate: true, timeoutMs: 200 });
+    assert.equal(drip.kind === 'error' && drip.code, 'timeout');
+    assert.ok(Date.now() - started < 2000);
+    const cut = await fetchFeed(`${base}/gzip-cut`, { userAgent: UA, allowPrivate: true, timeoutMs: 2000 });
+    assert.equal(cut.kind, 'error');
+  });
+
   it('reports Retry-After and permanent errors', async () => {
     const busy = await fetchFeed(`${base}/busy`, opts);
     assert.ok(busy.kind === 'error' && busy.retryAfterSeconds === 120 && !busy.permanent);
@@ -110,8 +138,21 @@ describe('fetching feeds', () => {
 });
 
 describe('public addresses', () => {
+  it('takes linear time on pathological content', () => {
+    const t = Date.now();
+    assert.equal(looksLikeHtml(`${'<!---->'.repeat(5000)}<rss/>`, 'application/xml'), false);
+    assert.equal(looksLikeHtml('<!-- x --><!DOCTYPE html><html>', ''), true);
+    htmlToText('<'.repeat(200_000));
+    htmlToText('<p'.repeat(100_000));
+    htmlToText('<!--'.repeat(100_000));
+    htmlToText('<script>'.repeat(50_000));
+    assert.equal(normalizeId(`${'/'.repeat(400_000)}a`).length, 400_001);
+    assert.ok(Date.now() - t < 2000, `${Date.now() - t} ms`);
+    assert.equal(htmlToText('<p>a</p><script>x</script >b<!-- c -->d'), 'a\n\nbd');
+  });
+
   it('classifies addresses correctly', () => {
-    for (const a of ['127.0.0.1', '10.1.2.3', '192.168.1.1', '172.16.0.1', '169.254.169.254', '100.64.0.1', '::1', 'fe80::1', 'fd00::1', '::ffff:127.0.0.1', '0.0.0.0']) {
+    for (const a of ['127.0.0.1', '10.1.2.3', '192.168.1.1', '172.16.0.1', '169.254.169.254', '100.64.0.1', '::1', 'fe80::1', 'fd00::1', '::ffff:127.0.0.1', '0.0.0.0', '::7f00:1', '64:ff9b:1::a00:1', '2002:7f00:1::', '2001:0:4136::1']) {
       assert.equal(isPublicAddress(a), false, a);
     }
     for (const a of ['93.184.216.34', '2606:4700::1111', '::ffff:93.184.216.34']) assert.equal(isPublicAddress(a), true, a);

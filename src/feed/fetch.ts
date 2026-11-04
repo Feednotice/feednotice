@@ -7,6 +7,7 @@ import http from 'node:http';
 import https from 'node:https';
 import dns from 'node:dns';
 import net from 'node:net';
+import { pipeline } from 'node:stream';
 import zlib from 'node:zlib';
 import type { LookupFunction } from 'node:net';
 
@@ -42,7 +43,8 @@ for (const [addr, prefix] of [
   ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4],
 ] as const) blocked.addSubnet(addr, prefix, 'ipv4');
 for (const [addr, prefix] of [
-  ['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8], ['64:ff9b::', 96], ['2001:db8::', 32],
+  ['::', 96], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8], ['64:ff9b::', 96], ['64:ff9b:1::', 48],
+  ['2001::', 32], ['2001:db8::', 32], ['2002::', 16],
 ] as const) blocked.addSubnet(addr, prefix, 'ipv6');
 
 export function isPublicAddress(address: string): boolean {
@@ -85,7 +87,16 @@ export async function fetchFeed(url: string, opts: FetchOptions): Promise<FetchR
 type Once = FetchResult | { kind: 'redirect'; location: string };
 
 function requestOnce(url: string, opts: FetchOptions, conditional: boolean): Promise<Once> {
-  return new Promise((resolve) => {
+  return new Promise((settle) => {
+    // One answer only; the request is torn down with it.
+    let done = false;
+    let deadline: NodeJS.Timeout | undefined;
+    const resolve = (r: Once) => {
+      if (done) return;
+      done = true;
+      clearTimeout(deadline);
+      settle(r);
+    };
     let u: URL;
     try {
       u = new URL(url);
@@ -112,10 +123,11 @@ function requestOnce(url: string, opts: FetchOptions, conditional: boolean): Pro
     if (conditional && opts.lastModified) headers['If-Modified-Since'] = opts.lastModified;
 
     const lib = u.protocol === 'https:' ? https : http;
+    const timeoutMs = opts.timeoutMs ?? 15_000;
     const req = lib.request(u, {
       method: 'GET',
       headers,
-      timeout: opts.timeoutMs ?? 15_000,
+      timeout: timeoutMs,
       lookup: opts.allowPrivate ? undefined : safeLookup,
     }, (res) => {
       const status = res.statusCode ?? 0;
@@ -124,7 +136,11 @@ function requestOnce(url: string, opts: FetchOptions, conditional: boolean): Pro
         res.resume();
         const loc = res.headers.location;
         if (!loc) return resolve(fail('no-location', `Redirect ${status} without a location.`, { httpStatus: status }));
-        return resolve({ kind: 'redirect', location: new URL(loc, u).toString() });
+        try {
+          return resolve({ kind: 'redirect', location: new URL(loc, u).toString() });
+        } catch {
+          return resolve(fail('invalid-url', 'Redirect to an invalid address.', { httpStatus: status }));
+        }
       }
       if (status === 304) {
         res.resume();
@@ -141,6 +157,8 @@ function requestOnce(url: string, opts: FetchOptions, conditional: boolean): Pro
 
       const maxBytes = opts.maxBytes ?? 5 * 1024 * 1024;
       const stream = decompress(res, res.headers['content-encoding']);
+      // A connection cut mid-body must end the request, compressed or not.
+      res.on('close', () => { if (!res.complete) resolve(fail('interrupted', 'Transfer interrupted.')); });
       const chunks: Buffer[] = [];
       let size = 0;
       stream.on('data', (c: Buffer) => {
@@ -172,6 +190,11 @@ function requestOnce(url: string, opts: FetchOptions, conditional: boolean): Pro
       req.destroy();
       resolve(fail('timeout', 'Response timed out.'));
     });
+    // The socket timeout only catches silence; a server that drips bytes is caught by this one.
+    deadline = setTimeout(() => {
+      req.destroy();
+      resolve(fail('timeout', 'Response took too long.'));
+    }, timeoutMs * 2);
     req.on('error', (e: NodeJS.ErrnoException) => {
       if (e.code === 'EPRIVATE') resolve(fail('private-address', 'Non-public address refused.', { permanent: true }));
       else resolve(fail('connect', `Connection failed: ${e.message}`));
@@ -181,12 +204,16 @@ function requestOnce(url: string, opts: FetchOptions, conditional: boolean): Pro
 }
 
 function decompress(res: http.IncomingMessage, encoding: string | undefined): NodeJS.ReadableStream & { destroy(): void } {
+  let decoder: zlib.Gunzip | zlib.Inflate | zlib.BrotliDecompress;
   switch ((encoding ?? '').trim().toLowerCase()) {
-    case 'gzip': case 'x-gzip': return res.pipe(zlib.createGunzip());
-    case 'deflate': return res.pipe(zlib.createInflate());
-    case 'br': return res.pipe(zlib.createBrotliDecompress());
+    case 'gzip': case 'x-gzip': decoder = zlib.createGunzip(); break;
+    case 'deflate': decoder = zlib.createInflate(); break;
+    case 'br': decoder = zlib.createBrotliDecompress(); break;
     default: return res;
   }
+  // pipeline() passes errors on, unlike pipe(): the request always ends.
+  pipeline(res, decoder, () => {});
+  return decoder;
 }
 
 /** Character set: HTTP header, else XML declaration, else UTF-8. */
@@ -238,6 +265,17 @@ export function postForm(url: string, fields: Record<string, string>, opts: Fetc
     if (!opts.allowPrivate && net.isIP(hostIp) && !isPublicAddress(hostIp)) return resolve({ status: 0, message: 'Non-public address refused.' });
     const body = new URLSearchParams(fields).toString();
     const lib = u.protocol === 'https:' ? https : http;
+    let done = false;
+    const finish = (r: { status: number } | { status: 0; message: string }) => {
+      if (done) return;
+      done = true;
+      clearTimeout(deadline);
+      resolve(r);
+    };
+    const deadline = setTimeout(() => {
+      req.destroy();
+      finish({ status: 0, message: 'Response took too long.' });
+    }, (opts.timeoutMs ?? 15_000) * 2);
     const req = lib.request(u, {
       method: 'POST',
       headers: { 'User-Agent': opts.userAgent, 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': String(Buffer.byteLength(body)) },
@@ -245,13 +283,13 @@ export function postForm(url: string, fields: Record<string, string>, opts: Fetc
       lookup: opts.allowPrivate ? undefined : safeLookup,
     }, (res) => {
       res.resume();
-      resolve({ status: res.statusCode ?? 0 });
+      finish({ status: res.statusCode ?? 0 });
     });
     req.on('timeout', () => {
       req.destroy();
-      resolve({ status: 0, message: 'Response timed out.' });
+      finish({ status: 0, message: 'Response timed out.' });
     });
-    req.on('error', (e) => resolve({ status: 0, message: e.message }));
+    req.on('error', (e) => finish({ status: 0, message: e.message }));
     req.end(body);
   });
 }

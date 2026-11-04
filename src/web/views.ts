@@ -10,7 +10,7 @@ import { CADENCES } from '../model.ts';
 import type { DiscoveredFeed } from '../feed/discover.ts';
 import type { Section } from '../i18n/en.ts';
 import {
-  COUNT_FLOOR, NAME_MAX, verificationDnsName, verificationFileUrl, verificationRecord, WELCOME_MAX,
+  COUNT_FLOOR, NAME_MAX, TERMS_DATE, verificationDnsName, verificationFileUrl, verificationRecord, WELCOME_MAX,
   type DomainRow, type FeedStats, type PublisherRow,
 } from '../publishers.ts';
 import type { SubscriptionListItem } from '../subscriptions.ts';
@@ -36,7 +36,8 @@ export function esc(s: string | null | undefined): string {
 
 /** Adds (or replaces) lang= on a local URL. */
 function withLang(url: string, locale: Locale): string {
-  const u = new URL(url, 'http://x');
+  // Always a path on this site: leading slashes collapsed, so "//host" cannot point elsewhere.
+  const u = new URL(url.replace(/^[/\\]+/, '/'), 'http://x');
   u.searchParams.set('lang', locale);
   return `${u.pathname}${u.search}`;
 }
@@ -84,7 +85,7 @@ ${body}
 </main>
 <footer>
 ${link('/privacy', m.nav.privacy)} · ${link('/account', m.nav.account)} · ${link('/publishers', m.nav.publishers)} · ${link('/robot', m.nav.robot)}<br>
-${link('/legal', m.nav.legal)} · <a href="${esc(config.sourceUrl)}">${esc(m.nav.source)}</a>
+${link('/terms', m.nav.terms)} · ${link('/legal', m.nav.legal)} · <a href="${esc(config.sourceUrl)}">${esc(m.nav.source)}</a>
 </footer>
 </body>
 </html>`;
@@ -124,16 +125,33 @@ select { font: inherit; }
 textarea { width: 100%; min-height: 6rem; font: inherit; padding: .5rem; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: inherit; }
 .publisher { border-left: 3px solid var(--accent); padding: .3rem 0 .3rem .8rem; }
 .notice { border-left: 4px solid var(--accent); padding: .5rem 1rem; }
+.check { margin-top: .8rem; }
+.lead { font-size: 1.1rem; }
+.steps { padding-left: 1.4rem; }
+.steps li, .promises li { margin-bottom: .5rem; }
+.cta { display: inline-block; padding: .5rem 1.2rem; border: 1px solid var(--accent); border-radius: 4px; text-decoration: none; }
+.faq dt { font-weight: bold; margin-top: 1rem; }
+.faq dd { margin: .2rem 0 0; }
+.check label { display: inline; font-weight: normal; }
 code.proof { word-break: break-all; }
 `;
 
 export function homePage(p: Page): string {
   const { m, config } = p;
+  const h = m.home;
   return layout(p, m.homeTitle, `
 <h1>${esc(m.homeHeading)}</h1>
-<p>${esc(m.homeIntro(config.serviceName))}</p>
+<p class="lead">${esc(m.homeIntro(config.serviceName))}</p>
 ${feedUrlForm(p, '')}
-<p class="muted">${esc(m.homePublishersPrefix)} <a href="${esc(withLang('/publishers', p.locale))}">${esc(m.homePublishersLink)}</a>.</p>`);
+<h2>${esc(h.stepsHeading)}</h2>
+<ol class="steps">${h.steps.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
+<h2>${esc(h.promisesHeading)}</h2>
+<ul class="promises">${h.promises.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
+<h2>${esc(h.publishersHeading)}</h2>
+<p>${esc(h.publishersText(config.serviceName))}</p>
+<p><a class="cta" href="${esc(withLang('/publishers', p.locale))}">${esc(h.publishersCta)}</a></p>
+<h2>${esc(h.faqHeading)}</h2>
+<dl class="faq">${h.faq.map((f) => `<dt>${esc(f.q)}</dt><dd>${esc(f.a)}</dd>`).join('')}</dl>`);
 }
 
 export function feedUrlForm(p: Page, value: string, error?: string): string {
@@ -193,7 +211,8 @@ ${CADENCES.map((c) => `<div><input type="radio" id="c-${c}" name="cadence" value
 </fieldset>
 <button type="submit">${esc(m.subscribeButton)}</button>
 </form>
-<p class="muted">${esc(m.subscribeNotice(config.pendingTtlDays))} <a href="${esc(withLang('/privacy', locale))}">${esc(m.privacyLink)}</a>.</p>`);
+<p class="muted">${esc(m.subscribeNotice(config.pendingTtlDays))} <a href="${esc(withLang('/privacy', locale))}">${esc(m.privacyLink)}</a>.
+${esc(m.subscribeTerms)} <a href="${esc(withLang('/terms', locale))}">${esc(m.termsLink)}</a>.</p>`);
 }
 
 export function chooseFeedPage(p: Page, candidates: DiscoveredFeed[]): string {
@@ -247,6 +266,24 @@ export function unsubscribePage(p: Page, action: string, feedTitle: string): str
 <h1>${esc(m.unsubscribeHeading)}</h1>
 <p>${esc(m.unsubscribeText(feedTitle))}</p>
 <form action="${esc(action)}" method="post">${langInput(p)}<button type="submit">${esc(m.unsubscribeButton)}</button></form>`);
+}
+
+export function stopDigestPage(p: Page, action: string, kind: 'daily' | 'weekly', feeds: string[]): string {
+  const { m } = p;
+  return layout(p, m.stopDigestTitle(kind), `
+<h1>${esc(m.stopDigestTitle(kind))}</h1>
+<p>${esc(m.stopDigestText(kind, feeds.length))}</p>
+<ul>${feeds.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
+<form action="${esc(action)}" method="post">${langInput(p)}<button type="submit">${esc(m.stopDigestButton)}</button></form>
+<p class="muted">${esc(m.stopDigestOther)} <a href="${esc(withLang('/account', p.locale))}">${esc(m.nav.account)}</a>.</p>`);
+}
+
+export function stoppedDigestPage(p: Page): string {
+  const { m } = p;
+  return layout(p, m.unsubscribedTitle, `
+<h1>${esc(m.unsubscribedHeading)}</h1>
+<p>${esc(m.stoppedDigestText)}</p>
+<p class="muted">${esc(m.unsubscribedNote)}</p>`);
 }
 
 export function unsubscribedPage(p: Page): string {
@@ -324,9 +361,37 @@ ${s.cadence === 'weekly' ? `<select name="day" aria-label="${esc(m.accountDayAri
 <button class="quiet" type="submit">${esc(m.accountChange)}</button></form>`;
 }
 
-export function publishersPage(p: Page, feedUrl: string | null): string {
+/** The publisher's button: their colour, their readers' language. */
+export interface ButtonOptions {
+  readers: Locale | null;
+  color: string;
+}
+export const DEFAULT_BUTTON_COLOR = '#3d5570';
+
+const ENVELOPE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>';
+
+/** Inline style of the button: self-contained, so it works on any page. Text colour follows the background's lightness. */
+export function buttonStyle(color: string): string {
+  const [r, g, b] = [1, 3, 5].map((i) => Number.parseInt(color.slice(i, i + 2), 16) / 255);
+  const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const light = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b) > 0.18;
+  return `display:inline-flex;align-items:center;gap:.5em;padding:.6em 1.1em;border-radius:6px;background:${color};color:${light ? '#111111' : '#ffffff'};font:600 15px/1.2 system-ui,sans-serif;text-decoration:none`;
+}
+
+export function buttonCode(config: Config, feedUrl: string, opts: ButtonOptions): { link: string; linkHtml: string; buttonHtml: string } {
+  const link = `${config.baseUrl}/s?feed=${encodeURIComponent(feedUrl)}${opts.readers ? `&lang=${opts.readers}` : ''}`;
+  const label = messages(opts.readers ?? 'en').publishersLinkText;
+  return {
+    link,
+    linkHtml: `<a href="${esc(link)}">${esc(label)}</a>`,
+    buttonHtml: `<a href="${esc(link)}" style="${buttonStyle(opts.color)}">${ENVELOPE}${esc(label)}</a>`,
+  };
+}
+
+export function publishersPage(p: Page, feedUrl: string | null, error?: string, button: ButtonOptions = { readers: null, color: DEFAULT_BUTTON_COLOR }): string {
   const { m, config } = p;
-  const link = feedUrl ? `${config.baseUrl}/s?feed=${encodeURIComponent(feedUrl)}` : null;
+  const code = feedUrl ? buttonCode(config, feedUrl, { ...button, readers: button.readers ?? null }) : null;
+  const readersOption = (value: string, label: string) => `<option value="${value}"${(button.readers ?? '') === value ? ' selected' : ''}>${esc(label)}</option>`;
   return layout(p, m.publishersTitle, `
 <h1>${esc(m.publishersHeading)}</h1>
 <p>${esc(m.publishersIntro(config.serviceName))}</p>
@@ -334,16 +399,20 @@ export function publishersPage(p: Page, feedUrl: string | null): string {
 ${langInput(p)}
 <label for="feed">${esc(m.publishersFeedLabel)}</label>
 <input id="feed" name="feed" type="url" required value="${esc(feedUrl)}">
+<label for="readers">${esc(m.publishersReadersLabel)}</label>
+<select id="readers" name="readers">${readersOption('', m.publishersReadersAuto)}${LOCALES.map((l) => readersOption(l, messages(l).langName)).join('')}</select>
+<label for="color">${esc(m.publishersColorLabel)}</label>
+<input id="color" name="color" type="color" value="${esc(button.color)}">
 <button type="submit">${esc(m.publishersButton)}</button>
 </form>
-${link ? `<h2>${esc(m.publishersLinkHeading)}</h2>
-<pre>&lt;a href="${esc(esc(link))}"&gt;${esc(esc(m.publishersLinkText))}&lt;/a&gt;</pre>
-<h2>${esc(m.publishersButtonHeading)}</h2>
-<pre>&lt;form action="${esc(config.baseUrl)}/s" method="get"&gt;
-  &lt;input type="hidden" name="feed" value="${esc(esc(feedUrl as string))}"&gt;
-  &lt;button&gt;${esc(esc(m.publishersLinkText))}&lt;/button&gt;
-&lt;/form&gt;</pre>
-<p>${esc(m.publishersTry)} <a href="${esc(link)}">${esc(m.publishersLinkText)}</a></p>` : ''}
+${code ? `<h2 id="button">${esc(m.publishersButtonHeading)}</h2>
+<p>${esc(m.publishersPreview)} ${code.buttonHtml}</p>
+<label for="code-button">${esc(m.publishersButtonCode)}</label>
+<textarea id="code-button" readonly rows="4">${esc(code.buttonHtml)}</textarea>
+<h2>${esc(m.publishersLinkHeading)}</h2>
+<textarea id="code-link" readonly rows="2" aria-label="${esc(m.publishersLinkHeading)}">${esc(code.linkHtml)}</textarea>
+<p class="muted">${esc(m.publishersCopy)}</p>
+<p>${esc(m.publishersTry)} <a href="${esc(code.link)}">${esc(m.publishersLinkText)}</a></p>` : ''}
 <h2>${esc(m.publishersTipsHeading)}</h2>
 <ul>
 ${m.publishersTips(config.serviceName, config.pollIntervalMinutes).map((t) => `<li>${esc(t)}</li>`).join('\n')}
@@ -351,9 +420,11 @@ ${m.publishersTips(config.serviceName, config.pollIntervalMinutes).map((t) => `<
 <h2 id="space">${esc(m.publisherSignInHeading)}</h2>
 <p>${esc(m.publisherSignInText)}</p>
 <form action="/publishers" method="post">
+${error ? `<p class="error" role="alert">${esc(error)}</p>` : ''}
 ${langInput(p)}
 <label for="pub-email">${esc(m.emailLabel)}</label>
 <input id="pub-email" name="email" type="email" autocomplete="email" required>
+<div class="check"><input id="pub-terms" name="terms" type="checkbox" value="1" required> <label for="pub-terms">${esc(m.publisherTermsLabel)}</label> (<a href="${esc(withLang('/terms', p.locale))}">${esc(m.nav.terms)}</a>)</div>
 <button type="submit">${esc(m.publisherSignInButton)}</button>
 </form>`);
 }
@@ -368,7 +439,13 @@ export function publisherPage(
   const { m, config, locale } = p;
   const hidden = (name: string, value: string | number) => `<input type="hidden" name="${name}" value="${esc(String(value))}">`;
   const count = (n: number) => (n < COUNT_FLOOR ? m.publisherFewer(COUNT_FLOOR) : String(n));
-  const notice = result && m.publisherResult[result] ? `<p class="notice" role="status">${esc(m.publisherResult[result])}</p>` : '';
+  // Per cadence only when no column holds a small number: otherwise it could be worked out
+  // from the total and the other columns.
+  const breakdown = (s: FeedStats): string[] => {
+    const cells = [s.immediate, s.daily, s.weekly];
+    return cells.every((n) => n === 0 || n >= COUNT_FLOOR) ? cells.map(String) : cells.map(() => '—');
+  };
+  const notice = result && Object.hasOwn(m.publisherResult, result) ? `<p class="notice" role="status">${esc(m.publisherResult[result])}</p>` : '';
   return layout(p, m.publisherTitle, `
 <h1>${esc(m.publisherTitle)}</h1>
 <p class="muted">${esc(m.publisherSignedIn(publisher.email, m.planNames[publisher.plan]))}</p>
@@ -407,7 +484,7 @@ ${hidden('action', 'add')}${langInput(p)}
 ${stats.length === 0 ? `<p>${esc(m.publisherNoFeeds)}</p>` : `<table>
 <thead><tr><th>${esc(m.publisherColFeed)}</th>${CADENCES.map((c) => `<th>${esc(m.cadenceShort[c])}</th>`).join('')}<th>${esc(m.publisherColTotal)}</th></tr></thead>
 <tbody>
-${stats.map((s) => `<tr><td><a href="${esc(s.url)}">${esc(s.title || s.url)}</a></td><td>${esc(count(s.immediate))}</td><td>${esc(count(s.daily))}</td><td>${esc(count(s.weekly))}</td><td><strong>${esc(count(s.total))}</strong></td></tr>`).join('\n')}
+${stats.map((s) => `<tr><td><a href="${esc(s.url)}">${esc(s.title || s.url)}</a><br><a class="muted" href="${esc(withLang(`/publishers?feed=${encodeURIComponent(s.url)}`, locale))}#button">${esc(m.publishersButtonCode)}</a></td>${breakdown(s).map((c) => `<td>${esc(c)}</td>`).join('')}<td><strong>${esc(count(s.total))}</strong></td></tr>`).join('\n')}
 </tbody></table>`}
 <p class="muted">${esc(m.publisherCountsNote(COUNT_FLOOR))}</p>
 
@@ -429,6 +506,14 @@ export function robotPage(p: Page): string {
 ${m.robotPoints(config.minPollIntervalMinutes, config.maxPollIntervalMinutes).map((t) => `<li>${esc(t)}</li>`).join('\n')}
 </ul>
 <p>${esc(m.robotContact)} <a href="mailto:${esc(config.contactEmail)}">${esc(config.contactEmail)}</a>.</p>`);
+}
+
+export function termsPage(p: Page): string {
+  const { m, config, locale } = p;
+  const sections = m.termsSections({ service: config.serviceName, operator: config.operatorName, contact: config.contactEmail });
+  return layout(p, m.termsTitle, `<h1>${esc(m.termsTitle)}</h1>
+<p class="muted">${esc(m.termsUpdated(formatDate(locale, config.timeZone, TERMS_DATE)))}</p>
+${renderSections(sections)}`);
 }
 
 export function privacyPage(p: Page): string {

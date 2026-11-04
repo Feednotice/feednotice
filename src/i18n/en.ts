@@ -54,7 +54,7 @@ export const en = {
   label: (label: string) => `${label}:`,
 
   // Layout
-  nav: { privacy: 'Your data', account: 'My subscriptions', publishers: 'Publishers', robot: 'The robot', legal: 'Legal notice', source: 'Source code' },
+  nav: { privacy: 'Your data', account: 'My subscriptions', publishers: 'Publishers', robot: 'The robot', legal: 'Legal notice', terms: 'Terms of use', source: 'Source code' },
   languageSwitch: 'Language',
 
   // Cadences and weekdays
@@ -74,8 +74,33 @@ export const en = {
     `Many websites publish an Atom or RSS feed: the list of their latest posts. ${service} emails them to you, as often as you like. No account, no password, no ads, no tracking.`,
   feedUrlLabel: 'Feed or website address',
   feedUrlButton: 'Show this feed',
-  homePublishersPrefix: 'You publish a website? Put a "Get updates by email" link next to your feed:',
-  homePublishersLink: "here's how",
+  home: {
+    stepsHeading: 'How it works',
+    steps: [
+      'Paste the address of a feed, or simply of a website: its feeds are found for you. Many sites also offer a "Get updates by email" link.',
+      'Enter your email address and choose how often: one email per new item, or a daily or weekly digest, at the hour you like.',
+      'Confirm from the email you receive. From then on, each email has a one-click unsubscribe link.',
+    ],
+    promisesHeading: 'What you can count on',
+    promises: [
+      'Free for readers, with no ads in the emails.',
+      'No tracking: no pixel, no rewritten links, no cookie. Emails read the same without images.',
+      'Your address is used only for these emails, never shared, and erased as soon as you stop your last subscription.',
+      'Several digests at the same hour arrive as one email, with a section per site.',
+      'If a site stops its feed, you are told, instead of being left waiting.',
+    ],
+    publishersHeading: 'You publish a website?',
+    publishersText: (service: string) =>
+      `Let your readers follow you by email with one link next to your feed: no script, no account, no list to manage. ${service} reads your feed politely, once whatever the number of subscribers, and within a minute if it announces a WebSub hub.`,
+    publishersCta: 'Get the link or a button',
+    faqHeading: 'Questions',
+    faq: [
+      { q: 'What is a feed?', a: 'A list of a website\'s latest posts, published at an address that programs can read (Atom or RSS). Most blogs, news sites and many public bodies have one, often linked with an orange icon.' },
+      { q: 'I cannot find the feed address.', a: 'Paste the website\'s address instead: if the site announces a feed, it is found for you.' },
+      { q: 'Do I need an account?', a: 'No. Your subscriptions are reached through a link sent to your address, valid for 24 hours, whenever you ask for it.' },
+      { q: 'How do I stop?', a: 'With the link at the bottom of any email, in one click, or from "My subscriptions", where you can also erase your address.' },
+    ],
+  },
 
   // Subscribe page
   subscribeTitle: (feed: string) => `Subscribe to ${feed}`,
@@ -91,6 +116,8 @@ export const en = {
   subscribeNotice: (days: number) =>
     `We will send you an email with a confirmation link. Until you click it, nothing else will be sent to you, and your address will be erased after ${days} days. Your address is only used for these emails:`,
   privacyLink: 'what we do with it',
+  subscribeTerms: 'By subscribing, you accept the',
+  termsLink: 'terms of use',
 
   // Errors
   feedErrorTitle: 'Feed not readable',
@@ -145,6 +172,14 @@ export const en = {
   unsubscribedText: 'You will receive nothing more for this feed. If it was your last subscription, your address has been erased.',
   unsubscribedNote: 'A mistake? Just subscribe again from the original website.',
 
+  // Stopping a merged digest
+  stopDigestTitle: (kind: 'daily' | 'weekly'): string => (kind === 'daily' ? 'Stop the daily digest' : 'Stop the weekly digest'),
+  stopDigestText: (kind: 'daily' | 'weekly', n: number) =>
+    `Stop the ${kind} digest? It gathers ${n === 1 ? '1 feed' : `${n} feeds`}:`,
+  stopDigestButton: 'Stop this digest',
+  stopDigestOther: 'Your other subscriptions are not affected. To stop only one feed, use the link under it in the email, or:',
+  stoppedDigestText: 'You will no longer receive this digest. If it held your last subscriptions, your address has been erased.',
+
   // Account
   accountTitle: 'My subscriptions',
   accountRequestText: 'No password: enter your address and you will receive a link, valid for 24 hours, that opens your subscriptions.',
@@ -180,6 +215,12 @@ export const en = {
   publishersButtonHeading: 'Or a button',
   publishersLinkText: 'Get updates by email',
   publishersTry: 'Try it:',
+  publishersReadersLabel: 'Language of your readers',
+  publishersReadersAuto: 'their browser decides',
+  publishersColorLabel: 'Button colour',
+  publishersPreview: 'Preview:',
+  publishersCopy: 'Copy this code into your page. It contains no script and loads nothing: your readers are not tracked, by you or by us.',
+  publishersButtonCode: 'Button code',
   publishersTipsHeading: 'What your feed gains from containing',
   publishersTips: (service: string, minutes: number): string[] => [
     'a stable identifier per item (<id> in Atom, <guid> in RSS): it prevents duplicate emails;',
@@ -195,6 +236,8 @@ export const en = {
   publisherSignInHeading: 'Publisher space',
   publisherSignInText: 'Verify your domain to show your name and a welcome text on the subscribe page of your feeds, and see how many people follow them. No password: we email you a link.',
   publisherSignInButton: 'Email me a sign-in link',
+  publisherTermsLabel: 'I have read and accept the terms of use, including the part for publishers',
+  publisherTermsRequired: 'Please accept the terms of use to open a publisher space.',
   publisherSentText: 'A sign-in link, valid for 24 hours, has just been sent to this address.',
   publisherTitle: 'Publisher space',
   publisherSignedIn: (email: string, plan: string) => `Signed in as ${email} · ${plan} plan`,
@@ -283,6 +326,63 @@ export const en = {
     },
   ],
 
+  termsTitle: 'Terms of use',
+  termsUpdated: (date: string) => `Last updated: ${date}.`,
+  termsSections: (p: { service: string; operator: string; contact: string }): Section[] => [
+    {
+      heading: 'The service',
+      paragraphs: [
+        `${p.service} emails the new entries of Atom and RSS feeds to the people who ask for them. It is run by ${p.operator} (see the legal notice). Receiving updates is free.`,
+        'Using the service means accepting these terms. If you do not accept them, do not use it.',
+      ],
+    },
+    {
+      heading: 'Subscribing',
+      items: [
+        'Subscribe only addresses that are yours, or that you are allowed to use. Every subscription must be confirmed from the address itself.',
+        'You can change how often you get a feed, stop a feed, or erase your address at any time: from any email, or from "My subscriptions".',
+        'Do not use the service to send requests in bulk, to flood an address, or to get around its limits. Requests that look like abuse can be refused, and their author blocked.',
+      ],
+    },
+    {
+      heading: 'Content',
+      paragraphs: [
+        `The feeds belong to their publishers. ${p.service} copies their titles, summaries and links as they are, without checking or editing them, and is not responsible for them or for the websites they link to.`,
+        `To report content that is unlawful, write to ${p.contact}: the feed can be suspended for everyone.`,
+      ],
+    },
+    {
+      heading: 'Publishers',
+      paragraphs: ['These points apply to anyone who opens a publisher space.'],
+      items: [
+        'Verify only domains you control or are authorized to represent. Whoever proves a domain last holds it; a proof that disappears is lost.',
+        'The name and welcome text you show to readers must be accurate, lawful, and must not impersonate anyone or advertise for third parties. They can be removed if they are not.',
+        "Subscriber numbers are given for information, as they are; numbers below five are not shown. You never see subscribers' addresses, and must not try to identify them.",
+        'You can delete your publisher space at any time. A space that never verifies a domain is deleted after 30 days.',
+        'If paid plans are offered, their price and conditions are shown before you subscribe to one.',
+      ],
+    },
+    {
+      heading: 'Availability',
+      paragraphs: [
+        'The service is provided as it is. It does its best to deliver every update once and on time, but cannot guarantee it: feeds may be unavailable, and emails can be delayed or filtered by mailbox providers.',
+        'The service may change, or stop. When it stops, subscribers and publishers are told by email beforehand where possible.',
+      ],
+    },
+    {
+      heading: 'Personal data',
+      paragraphs: ['What is collected, why, for how long, and your rights: see "Your data".'],
+    },
+    {
+      heading: 'Changes to these terms',
+      paragraphs: ['These terms can change. The date above shows the latest version. Publishers accept the version in force each time they ask for a sign-in link; important changes are announced by email.'],
+    },
+    {
+      heading: 'Applicable law',
+      paragraphs: [`These terms are governed by the law of the country where ${p.operator} is established (see the legal notice). Questions: ${p.contact}.`],
+    },
+  ],
+
   privacyTitle: 'Your data',
   privacySections: (p: { operator: string; contact: string; processors: string; pendingDays: number; suspendedDays: number }): Section[] => [
     { heading: 'Who is responsible', paragraphs: [`${p.operator}, who can be reached at ${p.contact}.`] },
@@ -341,7 +441,19 @@ export const en = {
     footerNoTracking: (service: string) => `${service} tracks neither the opening of its emails nor the clicks on their links.`,
     digestHeading: { daily: "Today's updates", weekly: "This week's updates", burst: (n: number) => `${n} updates at once` },
     count: (n: number) => (n === 1 ? '1 update' : `${n} updates`),
-    confirmSubject: (feed: string) => `Confirm your subscription to "${feed}"`,
+    mergedSubject: (kind: 'daily' | 'weekly', n: number, feeds: number) =>
+      `Your ${kind} digest: ${n === 1 ? '1 update' : `${n} updates`} from ${feeds} feeds`,
+    mergedUnsubscribeFeed: 'Unsubscribe from this feed',
+    mergedWhy: (feeds: number, kind: 'daily' | 'weekly') => `You receive this ${kind} digest because this address is subscribed to these ${feeds} feeds.`,
+    mergedStop: (kind: 'daily' | 'weekly') => `Stop this ${kind} digest`,
+    deadSubject: (feed: string) => `"${feed}" no longer answers`,
+    deadBody: (p: { feed: string; url: string; since: string; until: string }): string[] => [
+      `Hello,`,
+      `The feed "${p.feed}" (${p.url}) has not answered since ${p.since}: its website may have moved or closed it. You will not receive its updates while it stays silent.`,
+      `It is still checked once a day. If it comes back, your updates resume by themselves. Otherwise, this subscription ends on ${p.until}, and if it is your last one, your address is erased. There is nothing to do.`,
+      `If the website now publishes its feed at another address, subscribe to the new one from the website.`,
+    ],
+    confirmSubject: (host: string) => `Confirm your subscription to updates from ${host}`,
     confirmBody: (p: { feed: string; url: string; cadence: string; link: string; days: number; service: string; baseUrl: string; contact: string }) => `Hello,
 
 Someone (you, probably) asked to receive by email the updates of:
@@ -361,7 +473,7 @@ and your address will be erased in ${p.days} days.
 --
 ${p.service} — ${p.baseUrl}
 Contact: ${p.contact}`,
-    alreadySubject: (feed: string) => `You are already subscribed to "${feed}"`,
+    alreadySubject: (host: string) => `You are already subscribed to updates from ${host}`,
     alreadyBody: (p: { feed: string; manage: string; service: string; baseUrl: string }) => `Hello,
 
 A new subscription request to the updates of "${p.feed}" was made

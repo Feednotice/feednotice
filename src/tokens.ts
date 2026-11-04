@@ -3,15 +3,16 @@
 //   unsubscribe   u/<subscription>.<signature>      (no expiry: it must work years later)
 //   account       m/<subscriber>.<expiry>.<signature>
 //   WebSub        websub/<feed>.<signature>       (no expiry: the hub calls it for as long as the lease runs)
+//   digest stop   u/daily/<subscriber>.<signature>, u/weekly/…  (no expiry: one-click unsubscribe of a merged digest)
 //   publisher     p/<email>.<expiry>.<signature>  (the account exists only once the link is opened)
 // Identifiers are never reused (AUTOINCREMENT): an old link cannot touch someone else's
 // subscription.
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-export type Purpose = 'confirm' | 'unsubscribe' | 'manage' | 'websub';
+export type Purpose = 'confirm' | 'unsubscribe' | 'manage' | 'websub' | 'stop-daily' | 'stop-weekly';
 
-const WITHOUT_EXPIRY: Purpose[] = ['unsubscribe', 'websub'];
+const WITHOUT_EXPIRY: Purpose[] = ['unsubscribe', 'websub', 'stop-daily', 'stop-weekly'];
 
 function mac(secret: string, purpose: Purpose, payload: string): string {
   return createHmac('sha256', secret).update(`${purpose}|${payload}`).digest('base64url').slice(0, 27);

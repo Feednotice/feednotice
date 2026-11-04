@@ -5,6 +5,7 @@
 
 import type { Ctx } from '../context.ts';
 import { bump, DAY, HOUR, peek } from '../ratelimit.ts';
+import { count } from '../stats.ts';
 import type { OutgoingMail } from './mailer.ts';
 
 const RESERVE = 0.1;
@@ -28,4 +29,25 @@ export async function sendCounted(ctx: Ctx, mail: OutgoingMail): Promise<void> {
   const now = ctx.now();
   bump(ctx.db, 'mail-out', HOUR, now);
   bump(ctx.db, 'mail-out-day', DAY, now);
+  count(ctx, 'mail.sent');
+}
+
+const inFlight = new Set<Promise<void>>();
+
+/**
+ * Sends without making the visitor wait. Pages that must answer the same whether or not an
+ * address is known (subscribe, account, publisher sign-in) use it: otherwise the time spent
+ * sending would tell. A failure is logged; the visitor can simply ask again.
+ */
+export function sendInBackground(ctx: Ctx, mail: OutgoingMail, after?: () => void): void {
+  const p = sendCounted(ctx, mail)
+    .then(() => after?.())
+    .catch((e: Error) => ctx.log(`background send failed: ${e.message}`))
+    .finally(() => inFlight.delete(p));
+  inFlight.add(p);
+}
+
+/** Waits for the background sends (shutdown, tests). */
+export async function flushSends(): Promise<void> {
+  while (inFlight.size) await Promise.all([...inFlight]);
 }

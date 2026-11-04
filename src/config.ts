@@ -50,6 +50,8 @@ export interface Config {
   /** Sending caps (0 = none): useful while warming up a new IP. */
   mailMaxPerHour: number;
   mailMaxPerDay: number;
+  /** Confirmation emails per hour, all visitors together: a ceiling on abuse (0 = none). */
+  confirmMaxPerHour: number;
   userAgent: string;
   pollIntervalMinutes: number;
   minPollIntervalMinutes: number;
@@ -64,6 +66,10 @@ export interface Config {
   burstLimit: number;
   /** Shared secret for /hooks/* (bounces from the MTA container, provider webhooks). */
   webhookSecret: string;
+  /** Operator's address for the daily report and alerts (empty = none). */
+  opsEmail: string;
+  /** Hour (service time zone) of the daily report. */
+  opsReportHour: number;
   trustProxy: boolean;
   /** Local tests only: allows reading feeds on private addresses. */
   allowPrivateFeeds: boolean;
@@ -115,6 +121,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     dkim: { domain: env.DKIM_DOMAIN ?? mailDomain, selector: env.DKIM_SELECTOR ?? 'fn1', keyFile: env.DKIM_KEY_FILE ?? '' },
     mailMaxPerHour: int(env.MAIL_MAX_PER_HOUR, 0),
     mailMaxPerDay: int(env.MAIL_MAX_PER_DAY, 0),
+    confirmMaxPerHour: int(env.CONFIRM_MAX_PER_HOUR, 300),
     userAgent: env.USER_AGENT ?? `FeedNotice/0.1 (${serviceName}; +${baseUrl}/robot; ${contactEmail})`,
     pollIntervalMinutes: int(env.POLL_INTERVAL_MINUTES, 30),
     minPollIntervalMinutes: 15,
@@ -126,6 +133,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     timeZone: env.TIME_ZONE ?? 'Europe/Paris',
     burstLimit: int(env.BURST_LIMIT, 5),
     webhookSecret: env.WEBHOOK_SECRET ?? '',
+    opsEmail: env.OPS_EMAIL ?? '',
+    opsReportHour: int(env.OPS_REPORT_HOUR, 8),
     trustProxy: env.TRUST_PROXY === '1',
     allowPrivateFeeds: env.ALLOW_PRIVATE_FEEDS === '1',
     runScheduler: env.RUN_SCHEDULER !== '0',

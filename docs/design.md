@@ -240,6 +240,18 @@ carry their expiry.
    failure reported at submission is retried 5 times, 15 min apart.
 6. **Bursts**: above 5 new entries at once, an "immediate" subscriber gets a single email.
    Catch-up horizon: 14 days.
+7. **One digest per reader**: a subscriber's digests due at the same time (same cadence, hour
+   and day) go out as one email, a section per feed, each with its own unsubscribe link. Its
+   one-click header (`/u/daily/<subscriber>.<signature>`, or `weekly`) stops that digest, every
+   feed it gathers. A digest holding a single feed keeps the feed's own email and headers.
+
+### Dead feeds
+
+After 25 failed reads in a row (about three weeks with the backoff), a feed is declared dead.
+Each subscriber gets one email saying so, and what happens next: the feed is still tried once
+a day; if it answers again, the subscriptions resume by themselves; after 30 days they end, and
+an address left with no subscription is erased (`src/deadfeeds.ts`, `src/purge.ts`). Someone
+subscribing to a dead feed that answers again brings it back at once.
 
 Known limit: an entry without an identifier whose title (or, without a link, whose summary) is
 later corrected is sent once more. Nothing better is possible without an identifier. Each case
@@ -255,7 +267,8 @@ Running your own MTA makes deliverability your job. What is in place, and what t
 | PTR (reverse DNS) matching HELO and A | `MTA_HOSTNAME`, PTR set in the hosting provider's control panel ([deploy.md](deploy.md#1-server)) |
 | One-click unsubscribe: `List-Unsubscribe` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058), honored within 48 h | every subscription email (`src/mail/render.ts`); immediate |
 | Visible unsubscribe link in the body | footer of every email |
-| Complaint rate < 0.3% (Gmail aims for < 0.1%) | double opt-in, a From name showing the feed ("Town news via Your Service"), a Reply-To that reaches a human, sign-up for Google Postmaster Tools and Microsoft SNDS/JMRP |
+| Complaint rate < 0.3% (Gmail aims for < 0.1%) | double opt-in, a From name showing the feed ("Town news via Your Service"), a Reply-To that reaches a human, sign-up for Google Postmaster Tools and Microsoft SNDS/JMRP; the operator is alerted above the limit ([§ 12](#12-operating)) |
+| Both unsubscribe headers covered by the DKIM signature | `DKIM_HEADERS` in `src/mail/mailer.ts` |
 | Bounces | envelope sender (`BOUNCE_ADDRESS`). Postfix's bounce reports (DSN) and remote bounces go to the app (`/hooks/bounce`), which believes only those that copy back the recipient's secret `X-FeedNotice-Ref` mark. Hard bounce: address suspended, erased after 90 days |
 | TLS | outgoing: opportunistic (`smtp_tls_security_level = may`); incoming: offered with a self-signed certificate, enough between MTAs |
 | New IP | warm-up caps (`MAIL_MAX_PER_DAY`), raised step by step |
@@ -264,14 +277,25 @@ Running your own MTA makes deliverability your job. What is in place, and what t
 ## 7. Anti-abuse
 
 - Double opt-in is mandatory. Until it is done, the only email sent is the confirmation.
-- At most 3 confirmation emails per day per address, and 20 requests per hour per IP. Beyond
-  that, the answer stays the same but nothing is sent.
+- At most 3 confirmation emails per day per address, 20 requests per hour per IP (per /64
+  network for IPv6), and `CONFIRM_MAX_PER_HOUR` (300) confirmation emails per hour in total.
+  Beyond that, the answer stays the same but nothing is sent.
+- Confirmation subjects name the feed's host, not its title: whoever controls a feed cannot
+  choose the subject of an email sent to someone else. Feed titles going into a sender name or
+  subject lose control and invisible characters, and anything looking like an encoded word.
+- Pages that must answer the same whatever the address (subscribe, account, publisher sign-in)
+  send their email in the background: the response time does not tell either.
+- Feeds are hostile input: every fetch has a total deadline (a server that drips bytes is cut),
+  redirects to invalid addresses are refused, compressed bodies cut midway end the request, and
+  HTML is reduced to text in linear time. The preview cache keeps no feed body.
 - An address that complained is never written to again; only its fingerprint is kept.
 - The MTA is not an open relay:
   - port 25 accepts only the bounce, postmaster and abuse addresses;
   - submission (port 2525) is not published outside the Docker network.
 - Pages run under a strict content security policy: no script, `form-action 'self'`, no
   framing. `Referrer-Policy: no-referrer` keeps the tokens in URLs from leaking to other sites.
+- The bounce hooks are not reachable from the Internet (Caddy answers 404); port 25 refuses
+  messages over 1 MB; the `mta` container gets only the settings it needs, not `SECRET`.
 
 ## 8. GDPR
 
@@ -305,9 +329,15 @@ then a sign-in link by email) to customize the page and see numbers:
     domain last holds it: the proof shows who controls the domain *now*.
 - **Which feeds**: those whose host is the domain or one of its subdomains; the most specific
   verified domain wins.
-- **What they see**: confirmed subscriptions per feed and cadence. Never an address, and never
-  a number below 5 (shown as "fewer than 5"), so nobody can work out who subscribed.
-- **What they customize**: name and welcome text, shown on the subscribe page of their feeds.
+- **What they see**: confirmed subscriptions per feed. Never an address, and never a number
+  below 5 (shown as "fewer than 5"). The split per cadence is shown only when no column holds a
+  small number, since it could otherwise be worked out from the total.
+- **What they customize**: name and welcome text, shown on the subscribe page of their feeds,
+  only when the feed is served by their domain itself (not reached through a redirect).
+- **Terms**: the sign-in form asks to accept the terms of use (`/terms`); opening the link
+  records the version accepted (`TERMS_VERSION` in `src/publishers.ts`).
+- **A button**: `/publishers?feed=…` prepares a plain link and a styled button (their colour,
+  their readers' language, an inline icon): copyable HTML with no script and nothing loaded.
 - **Tables** `publishers` (email, name, welcome text, plan, language) and `publisher_domains`
   (domain, token, method, verified and checked dates, failures).
 
@@ -324,7 +354,8 @@ When a followed feed announces a hub (`<link rel="hub">`):
    the usual fetch, parse and deduplicate path. An unsigned or badly signed notification is
    ignored (answered 202, as the specification asks);
 4. such a feed is then read periodically only every 6 hours, as a safety net;
-5. a feed that changes hub starts over with the new one.
+5. a feed that changes hub starts over with the new one;
+6. only `https` hubs are used, so the per-feed secret never travels in clear.
 
 ## 11. Feed discovery
 
@@ -333,17 +364,33 @@ People often paste a website's address rather than its feed. The page's announce
 one is used directly, several are offered as a choice, none gives a clear message. The
 subscription is always to the feed itself, never to the page.
 
-## 12. What is built
+## 12. Operating
+
+- **`cli.ts doctor`** checks a deployment as mailbox providers will see it: settings, A and PTR
+  records, MX, SPF (following `include`), DKIM against the key file, DMARC, outbound port 25,
+  HTTPS, and Spamhaus. It changes nothing and sends nothing; it exits with 1 if anything fails.
+- **Counters** (`stats_daily`): emails sent, bounces, complaints, subscriptions requested,
+  confirmed and stopped, feeds that died, per day. Numbers only. `cli.ts stats` prints them.
+- **Daily report** to `OPS_EMAIL` at `OPS_REPORT_HOUR`: yesterday, the last 7 days, the current
+  state, and what needs attention.
+- **Alerts** to `OPS_EMAIL` (and the log) as soon as today's numbers cross a limit: hard
+  bounces above 5% of emails sent, complaints above 0.3%, more than 20% of emails refused at
+  submission. Each kind at most every 6 hours.
+
+## 13. What is built
 
 | Done | Not yet |
 |---|---|
 | Subscribe page with preview (title, three latest items), cadence choice | Publisher logo, welcome text in the confirmation email |
-| Double opt-in, signed link valid 7 days, anti-antivirus button | Warning subscribers when a feed dies |
-| Polite periodic reading, deduplication, per-entry sending, grouped bursts | Merging a subscriber's digests into one email |
-| WebSub: signed callbacks, lease renewal, push triggers a read | Keyword filters, several feeds merged into one digest |
-| Feed discovery from a web page's address | Admin dashboard |
-| Daily and weekly digests; time and day chosen by the subscriber | More languages |
-| One-click unsubscribe (body and RFC 8058 headers), address erasure | Email provider HTTP API adapter (SMTP relays already work) |
+| Double opt-in, signed link valid 7 days, anti-antivirus button | Keyword filters |
+| Polite periodic reading, deduplication, per-entry sending, grouped bursts | Admin dashboard (the daily report and `stats` cover the numbers) |
+| WebSub: signed callbacks, lease renewal, push triggers a read | More languages |
+| Feed discovery from a web page's address | Email provider HTTP API adapter (SMTP relays already work) |
+| Daily and weekly digests; time and day chosen by the subscriber; one digest per reader | |
+| One-click unsubscribe (body and RFC 8058 headers), address erasure | |
+| Dead feeds: subscribers told, daily retries, end after 30 days | |
+| Home page, terms of use, publisher button generator | |
+| Setup checker (`doctor`), daily report and alerts for the operator | |
 | Account page by magic link: cadence, schedule, language, stop, erase | |
 | Publisher space: magic-link sign-in, domain proof by file or DNS, name and welcome text, counts never below 5 | |
 | English and French pages and emails; language stored per subscriber | |

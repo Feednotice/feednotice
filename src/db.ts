@@ -146,6 +146,28 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX publisher_domains_verified ON publisher_domains(domain, verified_at);
   `,
+  // 3: dead feeds (subscribers told once), operator counters, publisher terms acceptance.
+  `
+  ALTER TABLE feeds ADD COLUMN dead_at INTEGER;
+  ALTER TABLE subscriptions ADD COLUMN dead_notice_at INTEGER;
+  ALTER TABLE publishers ADD COLUMN terms_version INTEGER;
+  ALTER TABLE publishers ADD COLUMN terms_accepted_at INTEGER;
+  UPDATE feeds SET dead_at = COALESCE(last_fetched_at, created_at) WHERE status = 'dead';
+
+  -- Daily counters for the operator (sent, bounces, complaints…): numbers only, no address.
+  CREATE TABLE stats_daily (
+    day TEXT NOT NULL,
+    key TEXT NOT NULL,
+    n   INTEGER NOT NULL,
+    PRIMARY KEY (day, key)
+  ) WITHOUT ROWID;
+
+  -- Small internal state (last report sent, last alert…).
+  CREATE TABLE state (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = 1 + MIGRATIONS.length;

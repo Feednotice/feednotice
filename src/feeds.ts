@@ -8,6 +8,7 @@ import { FeedParseError, parseFeed, type ParsedFeed } from './feed/parse.ts';
 import type { FeedErrorCode } from './i18n/en.ts';
 import { ingestEntries, sha } from './ingest.ts';
 import type { FeedRow } from './model.ts';
+import { count } from './stats.ts';
 import { WEBSUB_POLL_MINUTES, websubActive } from './websub.ts';
 
 const MINUTE = 60_000;
@@ -33,7 +34,9 @@ export interface LoadedFeed {
   /** The feed's address: the one given, or the one found on the web page that was given. */
   url: string;
   feed: ParsedFeed;
+  /** As fetched; `body` is emptied once cached (see loadFeedCached). */
   fetched: Extract<FetchResult, { kind: 'ok' }>;
+  bodyHash: string;
 }
 
 export type LoadResult =
@@ -68,7 +71,7 @@ async function fetchOnce(ctx: Ctx, url: string): Promise<Extract<FetchResult, { 
 
 function parsed(url: string, fetched: Extract<FetchResult, { kind: 'ok' }>): LoadResult {
   try {
-    return { ok: true, url, feed: parseFeed(fetched.body, fetched.finalUrl), fetched };
+    return { ok: true, url, feed: parseFeed(fetched.body, fetched.finalUrl), fetched, bodyHash: sha(fetched.body) };
   } catch (e) {
     if (e instanceof FeedParseError) return { ok: false, code: e.code, message: e.message };
     throw e;
@@ -76,17 +79,20 @@ function parsed(url: string, fetched: Extract<FetchResult, { kind: 'ok' }>): Loa
 }
 
 // Small preview cache: the subscribe page and the form submission read the feed only once.
+// Bodies are not kept (a feed can weigh 5 MB), and the cache stays small.
 const previewCache = new Map<string, { at: number; result: LoadedFeed }>();
+const PREVIEW_CACHE_SIZE = 50;
 
 export async function loadFeedCached(ctx: Ctx, url: string): Promise<LoadResult> {
   const hit = previewCache.get(url);
   if (hit && ctx.now() - hit.at < 5 * MINUTE) return hit.result;
   const result = await loadFeed(ctx, url);
-  if (result.ok) {
-    if (previewCache.size > 500) previewCache.clear();
-    previewCache.set(url, { at: ctx.now(), result });
-  }
-  return result;
+  if (!result.ok) return result;
+  const lean: LoadedFeed = { ...result, fetched: { ...result.fetched, body: '' } };
+  previewCache.delete(url);
+  if (previewCache.size >= PREVIEW_CACHE_SIZE) previewCache.delete(previewCache.keys().next().value as string);
+  previewCache.set(url, { at: ctx.now(), result: lean });
+  return lean;
 }
 
 /** Registers a feed (or finds it). On creation, its current content becomes the backlog: none of it is sent. */
@@ -94,13 +100,18 @@ export function upsertFeed(ctx: Ctx, loaded: LoadedFeed): FeedRow {
   const { db } = ctx;
   const url = loaded.url;
   const existing = db.prepare('SELECT * FROM feeds WHERE url = ?').get(url) as unknown as FeedRow | undefined;
-  if (existing) return existing;
   const now = ctx.now();
+  if (existing?.status === 'dead') {
+    // It was just read successfully: back to life, read again at the next round.
+    db.prepare(`UPDATE feeds SET ${ALIVE}, error_count = 0, last_error = NULL, next_fetch_at = ? WHERE id = ?`).run(now, existing.id);
+    return db.prepare('SELECT * FROM feeds WHERE id = ?').get(existing.id) as unknown as FeedRow;
+  }
+  if (existing) return existing;
   const { feed, fetched } = loaded;
   const res = db.prepare(`
     INSERT INTO feeds (url, title, site_url, hub_url, self_url, etag, last_modified, body_hash, created_at, last_fetched_at, last_success_at, next_fetch_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    url, feed.title, feed.siteUrl, feed.hubUrl, feed.selfUrl, fetched.etag, fetched.lastModified, sha(fetched.body),
+    url, feed.title, feed.siteUrl, feed.hubUrl, feed.selfUrl, fetched.etag, fetched.lastModified, loaded.bodyHash,
     now, now, now, now + nextInterval(ctx, fetched.maxAgeSeconds),
   );
   const id = Number(res.lastInsertRowid);
@@ -123,8 +134,14 @@ function backoff(errorCount: number, retryAfterSeconds: number | null | undefine
   return Math.max(exp, retry);
 }
 
-/** After this many consecutive failures (about three weeks at one a day), the feed is declared dead. */
+/** After this many consecutive failures (about three weeks, with the backoff), the feed is declared dead. */
 const DEAD_AFTER_ERRORS = 25;
+/** A dead feed is still tried once a day; after this long, its subscriptions end (see purge.ts). */
+export const DEAD_GRACE_DAYS = 30;
+const DAY = 24 * 60 * MINUTE;
+
+/** Any successful read brings a dead feed back: subscriptions simply resume. */
+const ALIVE = "status = 'active', dead_at = NULL";
 
 export interface PollOutcome {
   feedId: number;
@@ -145,7 +162,7 @@ export async function pollFeed(ctx: Ctx, feed: FeedRow): Promise<PollOutcome> {
 
   if (res.kind === 'error') return recordError(ctx, feed, now, res.message, res.retryAfterSeconds);
   if (res.kind === 'not-modified') {
-    db.prepare('UPDATE feeds SET last_fetched_at = ?, last_success_at = ?, error_count = 0, last_error = NULL, next_fetch_at = ? WHERE id = ?')
+    db.prepare(`UPDATE feeds SET last_fetched_at = ?, last_success_at = ?, error_count = 0, last_error = NULL, next_fetch_at = ?, ${ALIVE} WHERE id = ?`)
       .run(now, now, now + nextInterval(ctx, res.maxAgeSeconds, websubActive(feed, now)), feed.id);
     return { feedId: feed.id, status: 'not-modified', newEntries: 0 };
   }
@@ -154,7 +171,7 @@ export async function pollFeed(ctx: Ctx, feed: FeedRow): Promise<PollOutcome> {
   const bodyHash = sha(res.body);
   const next = now + nextInterval(ctx, res.maxAgeSeconds, websubActive(feed, now));
   if (bodyHash === feed.body_hash) {
-    db.prepare('UPDATE feeds SET etag = ?, last_modified = ?, last_fetched_at = ?, last_success_at = ?, error_count = 0, last_error = NULL, next_fetch_at = ? WHERE id = ?')
+    db.prepare(`UPDATE feeds SET etag = ?, last_modified = ?, last_fetched_at = ?, last_success_at = ?, error_count = 0, last_error = NULL, next_fetch_at = ?, ${ALIVE} WHERE id = ?`)
       .run(res.etag, res.lastModified, now, now, next, feed.id);
     return { feedId: feed.id, status: 'unchanged', newEntries: 0 };
   }
@@ -173,29 +190,36 @@ export async function pollFeed(ctx: Ctx, feed: FeedRow): Promise<PollOutcome> {
       websub_expires_at = CASE WHEN hub_url IS ? THEN websub_expires_at ELSE NULL END,
       websub_requested_at = CASE WHEN hub_url IS ? THEN websub_requested_at ELSE NULL END,
       hub_url = ?, self_url = ?, etag = ?, last_modified = ?, body_hash = ?,
-      last_fetched_at = ?, last_success_at = ?, error_count = 0, last_error = NULL, next_fetch_at = ? WHERE id = ?`)
+      last_fetched_at = ?, last_success_at = ?, error_count = 0, last_error = NULL, next_fetch_at = ?, ${ALIVE} WHERE id = ?`)
     .run(parsed.title, parsed.siteUrl, parsed.hubUrl, parsed.hubUrl, parsed.hubUrl, parsed.selfUrl, res.etag, res.lastModified, bodyHash, now, now, next, feed.id);
+  if (feed.status === 'dead') ctx.log(`feed ${feed.id}: answers again, subscriptions resume`);
   for (const w of parsed.warnings) ctx.log(`feed ${feed.id}: ${w}`);
   if (result.rekeyed) ctx.log(`feed ${feed.id}: ${result.rekeyed} entry(ies) recognized despite a changed identifier`);
   return { feedId: feed.id, status: result.newEntryIds.length ? 'new' : 'unchanged', newEntries: result.newEntryIds.length };
 }
 
 function recordError(ctx: Ctx, feed: FeedRow, now: number, message: string, retryAfter: number | null | undefined): PollOutcome {
-  const count = feed.error_count + 1;
-  const status = count >= DEAD_AFTER_ERRORS ? 'dead' : 'active';
-  ctx.db.prepare('UPDATE feeds SET last_fetched_at = ?, error_count = ?, last_error = ?, next_fetch_at = ?, status = ? WHERE id = ?')
-    .run(now, count, message, now + backoff(count, retryAfter), status, feed.id);
-  ctx.log(`feed ${feed.id}: failure #${count}: ${message}`);
+  const errors = feed.error_count + 1;
+  const dies = feed.status === 'active' && errors >= DEAD_AFTER_ERRORS;
+  const dead = dies || feed.status === 'dead';
+  // Dead: tried once a day, so a feed that comes back is noticed.
+  const next = dead ? now + DAY : now + backoff(errors, retryAfter);
+  ctx.db.prepare(`UPDATE feeds SET last_fetched_at = ?, error_count = ?, last_error = ?, next_fetch_at = ?, status = ?,
+      dead_at = CASE WHEN ? THEN ? ELSE dead_at END WHERE id = ?`)
+    .run(now, errors, message, next, dead ? 'dead' : 'active', dies ? 1 : 0, now, feed.id);
+  ctx.log(`feed ${feed.id}: failure #${errors}: ${message}${dies ? ' (declared dead: subscribers will be told)' : ''}`);
+  if (dies) count(ctx, 'feed.died');
   return { feedId: feed.id, status: 'error', newEntries: 0, message };
 }
 
-/** Polls due feeds that have at least one confirmed subscription. */
+/** Polls due feeds that have at least one confirmed subscription (dead ones too, during their grace period). */
 export async function pollDueFeeds(ctx: Ctx, limit = 100, concurrency = 4): Promise<PollOutcome[]> {
+  const now = ctx.now();
   const due = ctx.db.prepare(`
     SELECT f.* FROM feeds f
-    WHERE f.status = 'active' AND f.next_fetch_at <= ?
+    WHERE (f.status = 'active' OR f.dead_at > ?) AND f.next_fetch_at <= ?
       AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = f.id AND s.status = 'active')
-    ORDER BY f.next_fetch_at LIMIT ?`).all(ctx.now(), limit) as unknown as FeedRow[];
+    ORDER BY f.next_fetch_at LIMIT ?`).all(now - DEAD_GRACE_DAYS * DAY, now, limit) as unknown as FeedRow[];
   const outcomes: PollOutcome[] = [];
   let i = 0;
   const workers = Array.from({ length: Math.min(concurrency, due.length) }, async () => {

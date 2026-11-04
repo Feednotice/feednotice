@@ -60,6 +60,8 @@ describe('sending caps', () => {
     await sendImmediate(ctx);
     const { requestManageLink } = await import('../src/subscriptions.ts');
     assert.equal(await requestManageLink(ctx, 'abonne1@exemple.fr', '192.0.2.1'), 'sent');
+    const { flushSends } = await import('../src/mail/quota.ts');
+    await flushSends();
     assert.match(ctx.mailer.messages.at(-1)?.subject ?? '', /access link/);
   });
 
