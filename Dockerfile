@@ -1,5 +1,5 @@
 # FeedNotice application: web pages, feed reading, sending (through the MTA container).
-FROM node:24-alpine
+FROM node:26-alpine
 
 ENV NODE_ENV=production
 WORKDIR /app

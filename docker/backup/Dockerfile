@@ -1,6 +1,6 @@
 # Off-site backups with restic: encrypted, deduplicated, sent to any restic repository (S3-
 # compatible storage, SFTP, a REST server…). Reads the copies the app makes every night.
-FROM alpine:3.22
+FROM alpine:3.24
 
 RUN apk add --no-cache restic sqlite ca-certificates tzdata
 
