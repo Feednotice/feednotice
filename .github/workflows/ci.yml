@@ -31,8 +31,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Lint the MTA shell scripts
-        run: shellcheck docker/mta/*.sh
+      - name: Lint the shell scripts
+        run: shellcheck -x -P SCRIPTDIR docker/mta/*.sh docker/backup/*.sh
 
       - name: Test configuration
         run: |
@@ -40,6 +40,8 @@ jobs:
           sed -i "s|^SITE_DOMAIN=.*|SITE_DOMAIN=localhost|; s|^BASE_URL=.*|BASE_URL=https://localhost|; s|^SERVICE_NAME=.*|SERVICE_NAME=CI Feeds|" .env
           sed -i "s|^SECRET=.*|SECRET=$(openssl rand -hex 32)|; s|^WEBHOOK_SECRET=.*|WEBHOOK_SECRET=$(openssl rand -hex 32)|" .env
           sed -i "s|^DKIM_KEY_FILE=.*|DKIM_KEY_FILE=|" .env
+          # Off-site backups to a repository inside the container: enough to test the whole chain.
+          printf 'COMPOSE_PROFILES=backup\nRESTIC_REPOSITORY=/tmp/ci-repo\nRESTIC_PASSWORD=%s\n' "$(openssl rand -hex 16)" >> .env
           docker compose config --quiet
 
       - name: Build images
@@ -71,6 +73,19 @@ jobs:
           assert relay >= 500, 'the MTA must refuse to relay'
           assert bounce == 250, 'the MTA must accept the bounce address'
           PY
+
+      - name: Mail log kept in a file, rotated
+        run: |
+          docker compose exec -T mta maillog | grep -q 'daemon started'
+          docker compose exec -T mta rotate-maillog 14
+          docker compose exec -T mta sh -c 'ls /var/log/postfix | grep -q "^mail\.log\."'
+
+      - name: Backup and restore test
+        run: |
+          docker compose exec -T app node src/cli.ts backup
+          docker compose exec -T backup backup-now
+          docker compose exec -T backup restore-test
+          docker compose exec -T app cat /app/backup-status/restore.json | grep -q '"ok":true'
 
       - name: Logs
         if: always()

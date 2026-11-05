@@ -1,7 +1,7 @@
 // SQLite schema. The only personal data: subscribers.email.
 // Timestamps are milliseconds since the Unix epoch (UTC).
 
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type StatementSync } from 'node:sqlite';
 
 export type Db = DatabaseSync;
 
@@ -168,6 +168,16 @@ const MIGRATIONS: string[] = [
     value TEXT NOT NULL
   ) WITHOUT ROWID;
   `,
+  // 4: indexes found missing by the load test (scripts/bench.ts). Deleting a feed's entries
+  // looked up entry_keys and deliveries by entry without an index: minutes instead of
+  // milliseconds. The last two serve the immediate pass (new entries, failed sends).
+  `
+  CREATE INDEX entry_keys_entry ON entry_keys(entry_id);
+  CREATE INDEX deliveries_entry ON deliveries(entry_id);
+  CREATE INDEX deliveries_updated ON deliveries(updated_at);
+  CREATE INDEX deliveries_failed ON deliveries(updated_at) WHERE status = 'failed';
+  CREATE INDEX entries_seen ON entries(first_seen_at) WHERE baseline = 0;
+  `,
 ];
 
 export const SCHEMA_VERSION = 1 + MIGRATIONS.length;
@@ -175,7 +185,9 @@ export const SCHEMA_VERSION = 1 + MIGRATIONS.length;
 export function openDb(path: string): Db {
   const db = new DatabaseSync(path);
   db.exec('PRAGMA foreign_keys = ON');
-  if (path !== ':memory:') db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000');
+  // WAL with synchronous=NORMAL: a commit survives a crash of the application, and costs no disk
+  // flush. Only a power cut or kernel crash can lose the last commits (see docs/design.md).
+  if (path !== ':memory:') db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000');
   let { user_version: version } = db.prepare('PRAGMA user_version').get() as { user_version: number };
   if (version > SCHEMA_VERSION) {
     throw new Error(`Database schema ${version} is newer than this code (${SCHEMA_VERSION}): update the application.`);
@@ -208,6 +220,23 @@ export function acquireLock(db: Db, name: string, holder: string, now: number, t
 
 export function releaseLock(db: Db, name: string, holder: string): void {
   db.prepare('DELETE FROM locks WHERE name = ? AND holder = ?').run(name, holder);
+}
+
+const statements = new WeakMap<Db, Map<string, StatementSync>>();
+
+/** A prepared statement, compiled once per database: for the queries run per email or per entry. */
+export function stmt(db: Db, sql: string): StatementSync {
+  let cache = statements.get(db);
+  if (!cache) {
+    cache = new Map();
+    statements.set(db, cache);
+  }
+  let s = cache.get(sql);
+  if (!s) {
+    s = db.prepare(sql);
+    cache.set(sql, s);
+  }
+  return s;
 }
 
 export function transaction<T>(db: Db, fn: () => T): T {

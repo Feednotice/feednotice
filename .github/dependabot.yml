@@ -1,0 +1,25 @@
+# Weekly dependency updates, grouped so they come as one pull request per ecosystem; CI tests
+# each one before anyone merges it.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ['*']
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
+  - package-ecosystem: docker
+    directories: [/, /docker/mta, /docker/backup]
+    schedule:
+      interval: monthly
+    groups:
+      images:
+        patterns: ['*']

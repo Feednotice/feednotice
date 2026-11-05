@@ -8,8 +8,8 @@
 
 name: feednotice
 
-# Container logs are rotated by size: Postfix logs contain recipient addresses (personal data),
-# so they must not grow forever. See docs/privacy.md.
+# Container logs are rotated by size; they hold no address. Postfix's mail log, which does, is a
+# file in the mta-logs volume kept MTA_LOG_DAYS days (14). See docs/privacy.md.
 x-logging: &logging
   driver: json-file
   options:
@@ -18,6 +18,8 @@ x-logging: &logging
 
 services:
   app:
+    # Released images (docs/deploy.md): `docker compose pull`. Without a release, `build` is used.
+    image: ghcr.io/feednotice/feednotice:${FEEDNOTICE_VERSION:-latest}
     build: .
     logging: *logging
     restart: unless-stopped
@@ -25,6 +27,7 @@ services:
     environment:
       NODE_ENV: production
       BRAND_DIR: /app/brand
+      BACKUP_STATUS_DIR: /app/backup-status
       DB_PATH: /app/data/feednotice.sqlite
       MAIL_TRANSPORT: smtp
       SMTP_HOST: mta
@@ -33,10 +36,12 @@ services:
     volumes:
       - app-data:/app/data
       - ${BRAND_PATH:-./docker/no-brand}:/app/brand:ro
+      - backup-status:/app/backup-status:ro
     networks: [internal]
     depends_on: [mta]
 
   mta:
+    image: ghcr.io/feednotice/feednotice-mta:${FEEDNOTICE_VERSION:-latest}
     build: docker/mta
     logging: *logging
     restart: unless-stopped
@@ -48,12 +53,14 @@ services:
       POSTMASTER_FORWARD: ${POSTMASTER_FORWARD}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
       MTA_INET_PROTOCOLS: ${MTA_INET_PROTOCOLS:-ipv4}
+      MTA_LOG_DAYS: ${MTA_LOG_DAYS:-14}
       APP_URL: http://app:8080
       MTA_TRUSTED_NETWORKS: 172.30.0.0/24
     ports:
       - "25:25"
     volumes:
       - mta-spool:/var/spool/postfix
+      - mta-logs:/var/log/postfix
     networks: [internal]
 
   caddy:
@@ -73,6 +80,28 @@ services:
     networks: [internal]
     depends_on: [app]
 
+  # Off-site backups (optional): enabled with COMPOSE_PROFILES=backup in .env. Sends the app's
+  # nightly copy to a restic repository, encrypted; tests a restore every Sunday.
+  backup:
+    image: ghcr.io/feednotice/feednotice-backup:${FEEDNOTICE_VERSION:-latest}
+    build: docker/backup
+    profiles: [backup]
+    logging: *logging
+    restart: unless-stopped
+    environment:
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
+      BACKUP_HOUR: ${BACKUP_HOUR:-3}
+      TZ: ${TIME_ZONE:-Europe/Paris}
+    volumes:
+      - app-data:/data:ro
+      - backup-status:/status
+      - backup-cache:/root/.cache/restic
+    networks: [internal]
+
 networks:
   internal:
     ipam:
@@ -82,5 +111,8 @@ networks:
 volumes:
   app-data:
   mta-spool:
+  mta-logs:
+  backup-status:
+  backup-cache:
   caddy-data:
   caddy-config:

@@ -18,6 +18,7 @@ describe('migrations', () => {
       v1.exec('PRAGMA user_version = 1');
       v1.exec('DROP TABLE publisher_domains; DROP TABLE publishers; DROP TABLE stats_daily; DROP TABLE state;');
       v1.exec('ALTER TABLE feeds DROP COLUMN dead_at; ALTER TABLE subscriptions DROP COLUMN dead_notice_at;');
+      v1.exec('DROP INDEX entry_keys_entry; DROP INDEX deliveries_entry; DROP INDEX deliveries_updated; DROP INDEX deliveries_failed; DROP INDEX entries_seen;');
       v1.exec('ALTER TABLE feeds DROP COLUMN self_url; ALTER TABLE feeds DROP COLUMN websub_expires_at; ALTER TABLE feeds DROP COLUMN websub_requested_at;');
       v1.prepare("INSERT INTO feeds (url, title, created_at) VALUES ('https://x.example/feed', 'X', 0)").run();
       v1.close();

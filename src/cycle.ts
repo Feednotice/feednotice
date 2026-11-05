@@ -8,6 +8,7 @@ import { acquireLock, releaseLock } from './db.ts';
 import { sendDeadFeedNotices } from './deadfeeds.ts';
 import { sendDigests, sendImmediate } from './delivery.ts';
 import { pollDueFeeds } from './feeds.ts';
+import { nightlyBackup } from './backup.ts';
 import { checkAlerts, sendOpsReport } from './ops.ts';
 import { defaultVerifyDeps, recheckDomains } from './publishers.ts';
 import { count } from './stats.ts';
@@ -36,6 +37,12 @@ export async function runCycle(ctx: Ctx): Promise<boolean> {
     if (imm.deferred || dig.deferred || dead.deferred) {
       ctx.log('sending cap reached: the rest goes out on the next round');
       count(ctx, 'mail.deferred');
+    }
+    try {
+      const file = nightlyBackup(ctx);
+      if (file) ctx.log(`backup: ${file}`);
+    } catch (e) {
+      ctx.log(`nightly backup failed: ${(e as Error).message}`);
     }
     // The operator's report and alerts: never allowed to stop the round.
     await sendOpsReport(ctx).catch((e: Error) => ctx.log(`daily report failed: ${e.message}`));

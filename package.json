@@ -1,6 +1,6 @@
 {
   "name": "feednotice",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Email the new entries of any Atom or RSS feed to its subscribers: double opt-in, no tracking.",
   "license": "AGPL-3.0-or-later",
@@ -12,7 +12,8 @@
     "start": "node --disable-warning=ExperimentalWarning src/cli.ts serve",
     "poll": "node --disable-warning=ExperimentalWarning src/cli.ts poll",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "bench": "node --disable-warning=ExperimentalWarning scripts/bench.ts"
   },
   "dependencies": {
     "fast-xml-parser": "^5.11.1",

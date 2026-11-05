@@ -2,6 +2,7 @@
 // One request per feed, whatever the number of subscribers.
 
 import type { Ctx } from './context.ts';
+import { transaction } from './db.ts';
 import { discoverFeeds, looksLikeHtml, type DiscoveredFeed } from './feed/discover.ts';
 import { fetchFeed, type FetchResult } from './feed/fetch.ts';
 import { FeedParseError, parseFeed, type ParsedFeed } from './feed/parse.ts';
@@ -160,7 +161,7 @@ export async function pollFeed(ctx: Ctx, feed: FeedRow): Promise<PollOutcome> {
   });
   const now = ctx.now();
 
-  if (res.kind === 'error') return recordError(ctx, feed, now, res.message, res.retryAfterSeconds);
+  if (res.kind === 'error') return recordError(ctx, feed, now, res.message, res.retryAfterSeconds, res.httpStatus === 410);
   if (res.kind === 'not-modified') {
     db.prepare(`UPDATE feeds SET last_fetched_at = ?, last_success_at = ?, error_count = 0, last_error = NULL, next_fetch_at = ?, ${ALIVE} WHERE id = ?`)
       .run(now, now, now + nextInterval(ctx, res.maxAgeSeconds, websubActive(feed, now)), feed.id);
@@ -195,12 +196,14 @@ export async function pollFeed(ctx: Ctx, feed: FeedRow): Promise<PollOutcome> {
   if (feed.status === 'dead') ctx.log(`feed ${feed.id}: answers again, subscriptions resume`);
   for (const w of parsed.warnings) ctx.log(`feed ${feed.id}: ${w}`);
   if (result.rekeyed) ctx.log(`feed ${feed.id}: ${result.rekeyed} entry(ies) recognized despite a changed identifier`);
+  if (res.movedPermanently) moveFeed(ctx, feed.id, res.finalUrl);
   return { feedId: feed.id, status: result.newEntryIds.length ? 'new' : 'unchanged', newEntries: result.newEntryIds.length };
 }
 
-function recordError(ctx: Ctx, feed: FeedRow, now: number, message: string, retryAfter: number | null | undefined): PollOutcome {
+function recordError(ctx: Ctx, feed: FeedRow, now: number, message: string, retryAfter: number | null | undefined, gone = false): PollOutcome {
   const errors = feed.error_count + 1;
-  const dies = feed.status === 'active' && errors >= DEAD_AFTER_ERRORS;
+  // "410 Gone" is the server saying the feed is gone for good: no point waiting three weeks.
+  const dies = feed.status === 'active' && (errors >= DEAD_AFTER_ERRORS || gone);
   const dead = dies || feed.status === 'dead';
   // Dead: tried once a day, so a feed that comes back is noticed.
   const next = dead ? now + DAY : now + backoff(errors, retryAfter);
@@ -210,6 +213,33 @@ function recordError(ctx: Ctx, feed: FeedRow, now: number, message: string, retr
   ctx.log(`feed ${feed.id}: failure #${errors}: ${message}${dies ? ' (declared dead: subscribers will be told)' : ''}`);
   if (dies) count(ctx, 'feed.died');
   return { feedId: feed.id, status: 'error', newEntries: 0, message };
+}
+
+/**
+ * The feed answered from a new address, through permanent redirects only, and that answer is a
+ * valid feed: from now on it is read there. If another followed feed already has that address,
+ * the two merge: subscriptions move over (starting from now, so nothing already sent comes
+ * again), and the old feed is forgotten.
+ */
+export function moveFeed(ctx: Ctx, feedId: number, rawUrl: string): 'moved' | 'merged' | 'unchanged' {
+  const { db } = ctx;
+  const url = normalizeFeedUrl(rawUrl);
+  const feed = db.prepare('SELECT * FROM feeds WHERE id = ?').get(feedId) as unknown as FeedRow | undefined;
+  if (!url || !feed || url === feed.url) return 'unchanged';
+  const other = db.prepare('SELECT id FROM feeds WHERE url = ?').get(url) as { id: number } | undefined;
+  return transaction(db, () => {
+    if (!other) {
+      db.prepare('UPDATE feeds SET url = ? WHERE id = ?').run(url, feedId);
+      ctx.log(`feed ${feedId}: moved permanently to ${url}`);
+      return 'moved';
+    }
+    const now = ctx.now();
+    db.prepare(`DELETE FROM subscriptions WHERE feed_id = ? AND subscriber_id IN (SELECT subscriber_id FROM subscriptions WHERE feed_id = ?)`).run(feedId, other.id);
+    db.prepare('UPDATE subscriptions SET feed_id = ?, created_at = ? WHERE feed_id = ?').run(other.id, now, feedId);
+    db.prepare('DELETE FROM feeds WHERE id = ?').run(feedId);
+    ctx.log(`feed ${feedId}: moved permanently to ${url}, already followed as feed ${other.id}: merged`);
+    return 'merged';
+  });
 }
 
 /** Polls due feeds that have at least one confirmed subscription (dead ones too, during their grace period). */

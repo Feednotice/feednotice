@@ -236,7 +236,8 @@ carry their expiry.
    example).
 4. **First read**: everything the feed contains is the backlog and is never sent.
 5. **At most once**: the delivery record is written and committed *before* sending. If the
-   process dies in between, that entry is lost for that subscriber rather than sent twice. A
+   process dies in between, that entry is lost for that subscriber rather than sent twice
+   (only a power cut at that exact moment could undo the commit: see §13). A
    failure reported at submission is retried 5 times, 15 min apart.
 6. **Bursts**: above 5 new entries at once, an "immediate" subscriber gets a single email.
    Catch-up horizon: 14 days.
@@ -377,7 +378,37 @@ subscription is always to the feed itself, never to the page.
   bounces above 5% of emails sent, complaints above 0.3%, more than 20% of emails refused at
   submission. Each kind at most every 6 hours.
 
-## 13. What is built
+## 13. Capacity
+
+`npm run bench` builds a database the size of a busy service and times what runs every minute,
+every morning and every night. Emails are rendered but not handed to an MTA, so the times are
+the application's own share. Measured on one core of a development machine (November 2026),
+100,000 subscribers, 5,000 feeds, about 300,000 subscriptions (60% one email per item, 30%
+daily, 10% weekly), two weeks of daily entries on every feed (3.9 million delivery records):
+
+| Operation | Time |
+|---|---|
+| A round with nothing new (every minute) | 0.27 s |
+| 10% of the feeds publish an entry: 26,000 emails rendered and recorded | 6 s (0.23 ms per email) |
+| The 7:00 digests: 17,000 digests (merged per reader) | 9 s |
+| Hourly purge | 0.05 s |
+| Nightly local backup | 3 s |
+| Database size; peak memory of the process | 148 MB without history, 371 MB with the two weeks of it; 400 MB |
+
+At this size the application is not the limit: handing 26,000 emails to Postfix and Postfix
+delivering them take far longer, and sending reputation (see §6) limits volume first. A VPS
+with 2 GB of memory is enough; 1 GB is tight past about 50,000 subscribers. Plan the disk for
+the 14 local copies: about 5 GB at this size.
+
+What the load test changed: two missing indexes made the purge take 8 minutes when a feed lost
+its last subscriber (now 50 ms); statements are compiled once and date formats built once
+(sending 15 times faster); SQLite runs WAL with `synchronous = NORMAL`, so a commit survives an
+application crash without a disk flush (a power cut could lose the last commits, and at worst
+re-send an email); the immediate pass looks only at what changed since the last complete pass,
+instead of every recent entry of every subscription (from about 2 s to 0.17 s per minute); the
+digest pass reads subscriptions only when a schedule is due.
+
+## 14. What is built
 
 | Done | Not yet |
 |---|---|

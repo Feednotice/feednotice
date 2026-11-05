@@ -28,7 +28,11 @@ export type FetchErrorCode =
   | 'no-location' | 'http-status' | 'too-large' | 'interrupted' | 'timeout' | 'connect';
 
 export type FetchResult =
-  | { kind: 'ok'; body: string; finalUrl: string; etag: string | null; lastModified: string | null; maxAgeSeconds: number | null; contentType: string }
+  | {
+    kind: 'ok'; body: string; finalUrl: string; etag: string | null; lastModified: string | null; maxAgeSeconds: number | null; contentType: string;
+    /** Reached through redirects that were all permanent (301, 308): the feed has moved. */
+    movedPermanently?: boolean;
+  }
   | { kind: 'not-modified'; maxAgeSeconds: number | null }
   | { kind: 'error'; code: FetchErrorCode; message: string; httpStatus?: number; retryAfterSeconds?: number | null; permanent?: boolean };
 
@@ -76,15 +80,18 @@ const safeLookup: LookupFunction = (hostname, options, callback) => {
 export async function fetchFeed(url: string, opts: FetchOptions): Promise<FetchResult> {
   const maxRedirects = opts.maxRedirects ?? 5;
   let current = url;
+  let permanent = true;
   for (let hop = 0; hop <= maxRedirects; hop++) {
     const res = await requestOnce(current, opts, hop === 0);
+    if (res.kind === 'ok' && hop > 0 && permanent) return { ...res, movedPermanently: true };
     if (res.kind !== 'redirect') return res;
+    permanent &&= res.status === 301 || res.status === 308;
     current = res.location;
   }
   return fail('too-many-redirects', 'Too many redirects.');
 }
 
-type Once = FetchResult | { kind: 'redirect'; location: string };
+type Once = FetchResult | { kind: 'redirect'; location: string; status: number };
 
 function requestOnce(url: string, opts: FetchOptions, conditional: boolean): Promise<Once> {
   return new Promise((settle) => {
@@ -137,7 +144,7 @@ function requestOnce(url: string, opts: FetchOptions, conditional: boolean): Pro
         const loc = res.headers.location;
         if (!loc) return resolve(fail('no-location', `Redirect ${status} without a location.`, { httpStatus: status }));
         try {
-          return resolve({ kind: 'redirect', location: new URL(loc, u).toString() });
+          return resolve({ kind: 'redirect', location: new URL(loc, u).toString(), status });
         } catch {
           return resolve(fail('invalid-url', 'Redirect to an invalid address.', { httpStatus: status }));
         }

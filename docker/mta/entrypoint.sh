@@ -9,6 +9,7 @@ set -eu
 APP_URL="${APP_URL:-http://app:8080}"
 TRUSTED_NETWORKS="${MTA_TRUSTED_NETWORKS:-172.30.0.0/24}"
 INET_PROTOCOLS="${MTA_INET_PROTOCOLS:-ipv4}"
+LOG_DAYS="${MTA_LOG_DAYS:-14}"
 MAIL_DOMAIN="${BOUNCE_ADDRESS#*@}"
 
 # --- main.cf ------------------------------------------------------------------------------
@@ -21,7 +22,7 @@ postconf -e \
   "inet_interfaces = all" \
   "inet_protocols = $INET_PROTOCOLS" \
   "mynetworks = 127.0.0.0/8 $TRUSTED_NETWORKS" \
-  "maillog_file = /dev/stdout" \
+  "maillog_file = /var/log/postfix/mail.log" \
   "mydestination =" \
   "local_transport = error:local delivery is disabled" \
   "alias_maps =" \
@@ -76,6 +77,12 @@ quote() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 } > /etc/forward-bounce.curl
 chown nobody /etc/forward-bounce.curl
 chmod 400 /etc/forward-bounce.curl
+
+# The mail log holds recipient addresses (personal data): rotated every night, and rotated files
+# older than MTA_LOG_DAYS are deleted. Read it with `maillog` (all days) or tail the file.
+mkdir -p /var/log/postfix
+printf '17 0 * * * /usr/local/bin/rotate-maillog %s\n' "$LOG_DAYS" > /etc/crontabs/root
+crond -b -l 8
 
 postfix check
 exec postfix start-fg

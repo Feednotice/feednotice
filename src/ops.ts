@@ -3,6 +3,7 @@
 // Written in English, like the logs.
 
 import type { Ctx } from './context.ts';
+import { backupProblems, offsiteStatus } from './backup.ts';
 import { slotStart } from './delivery.ts';
 import { sendCounted } from './mail/quota.ts';
 import { DAY, HOUR } from './ratelimit.ts';
@@ -55,7 +56,7 @@ export function snapshot(ctx: Ctx): Snapshot {
 type Totals = Partial<Record<StatKey, number>>;
 
 export interface Problem {
-  kind: 'bounces' | 'complaints' | 'failures';
+  kind: 'bounces' | 'complaints' | 'failures' | 'backup';
   text: string;
 }
 
@@ -85,7 +86,10 @@ function table(rows: [string, string | number][]): string {
 export function renderReport(ctx: Ctx, day: string, week: Totals, yesterday: Totals): { subject: string; text: string } {
   const s = snapshot(ctx);
   const n = (t: Totals, k: StatKey) => t[k] ?? 0;
-  const issues = problems(yesterday);
+  const issues = [...problems(yesterday), ...backupProblems(ctx).map((text) => ({ kind: 'backup' as const, text }))];
+  const offsite = offsiteStatus(ctx);
+  const when = (s: { at: number; ok: boolean; detail: string } | null) =>
+    (s ? `${s.ok ? 'ok' : 'FAILED'}, ${new Date(s.at).toISOString().slice(0, 16).replace('T', ' ')} UTC (${s.detail})` : 'never');
   const counts = (t: Totals): [string, number][] => [
     ['emails sent', n(t, 'mail.sent')],
     ['  carrying updates', n(t, 'mail.updates')],
@@ -122,6 +126,8 @@ export function renderReport(ctx: Ctx, day: string, week: Totals, yesterday: Tot
       ['feeds dead', s.feeds.dead],
       ['addresses blocked after a complaint', s.suppressions],
       ['verified publishers', s.publishers],
+      ['off-site backup', offsite ? when(offsite.backup) : 'not set up (docs/deploy.md, Backups)'],
+      ...(offsite ? [['restore test', when(offsite.restore)] as [string, string]] : []),
     ]),
     ...(dead.length ? ['', 'Dead feeds (most recent first)', ...dead.map((f) => `  ${f.title || '(untitled)'} — ${f.url}`)] : []),
     '',
@@ -156,7 +162,8 @@ export async function checkAlerts(ctx: Ctx): Promise<string[]> {
   const now = ctx.now();
   const today = dayOf(now, config.timeZone);
   const raised: string[] = [];
-  for (const issue of problems(totals(db, today, today))) {
+  const backupIssues = backupProblems(ctx).map((text) => ({ kind: 'backup' as const, text }));
+  for (const issue of [...problems(totals(db, today, today)), ...backupIssues]) {
     const key = `ops.alert.${issue.kind}`;
     if (now - Number(getState(db, key) ?? 0) < ALERT_EVERY) continue;
     setState(db, key, String(now));

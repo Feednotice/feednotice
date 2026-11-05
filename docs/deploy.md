@@ -66,14 +66,19 @@ fn1._domainkey.mail.example.org. TXT    "v=DKIM1; k=rsa; p=…"   ; printed by d
 ## 3. Install
 
 ```sh
-git clone https://github.com/Feednotice/feednotice.git /opt/feednotice
+git clone --branch v0.2.0 https://github.com/Feednotice/feednotice.git /opt/feednotice
 cd /opt/feednotice
 cp .env.example .env && chmod 600 .env
 openssl rand -base64 32 | tr '+/' '-_' | tr -d '='    # run twice: SECRET, WEBHOOK_SECRET
 nano .env                                              # name, secrets, domains, legal notice
-docker compose build
+echo FEEDNOTICE_VERSION=0.2.0 >> .env                  # the images of this release
+docker compose pull
 docker compose run --rm app node src/cli.ts dkim-keygen
 ```
+
+Each release publishes ready-built images (`ghcr.io/feednotice/feednotice`, `-mta`,
+`-backup`) for amd64 and arm64; `docker compose pull` fetches those of `FEEDNOTICE_VERSION`.
+To run code that is not released, or changed, use `docker compose build` instead.
 
 `dkim-keygen` writes the private key to the data volume and prints the `fn1._domainkey` record
 to publish (step 2). Then:
@@ -126,7 +131,7 @@ same across moves to keep your data.
    log shows `status=bounced`, then `relay=bounce-to-app ... status=sent`, and the address is
    suspended:
    ```sh
-   docker compose logs mta | grep bounce-to-app
+   docker compose exec mta maillog | grep bounce-to-app
    ```
 5. **Language**: `https://example.org/?lang=fr` shows French; a French browser gets it by
    default.
@@ -165,7 +170,7 @@ jumps. Their exact thresholds are not published; common practice:
 - Subscribers arrive gradually, so the warm-up mostly happens by itself. The cap is the safety
   net for a sudden big publisher.
 - Indicators to watch:
-  - hard bounces under 2% (`docker compose logs mta | grep -c status=bounced`);
+  - hard bounces under 2% (`docker compose exec mta maillog | grep -c status=bounced`);
   - no deferral wave from one provider (`grep deferred`);
   - Google Postmaster Tools reputation, once volume allows.
 - To register:
@@ -174,29 +179,66 @@ jumps. Their exact thresholds are not published; common practice:
 
 ## Backups
 
+**On the server**, every night at `BACKUP_HOUR` (3:00), the app writes a consistent copy of the
+database to `data/backups/` and keeps the last `BACKUP_KEEP` (14). Nothing to set up. A copy
+now: `docker compose exec app node src/cli.ts backup`.
+
+**Off the server**, the optional `backup` container sends the latest copy and the DKIM key to a
+[restic](https://restic.net) repository, encrypted on the server before it leaves: any
+S3-compatible storage, an SFTP server, or a restic REST server. Pick storage at another provider,
+or at least in another data centre. In `.env`:
+
 ```sh
-docker compose exec app node src/cli.ts backup 14     # keeps the 14 latest copies
+COMPOSE_PROFILES=backup
+RESTIC_REPOSITORY=s3:https://s3.example-provider.eu/my-bucket/feednotice
+RESTIC_PASSWORD=…                 # openssl rand -base64 32; store it OUTSIDE this server
+AWS_ACCESS_KEY_ID=…               # the storage's access key (S3 only)
+AWS_SECRET_ACCESS_KEY=…
 ```
 
-- **Host cron**, daily:
-  ```
-  15 3 * * * cd /opt/feednotice && docker compose exec -T app node src/cli.ts backup 14 >/dev/null
-  ```
-- **Off-site copy**: a second cron job takes the latest copy off the server:
-  ```sh
-  docker compose cp app:/app/data/backups ./backups-latest && rsync -a ./backups-latest/ backup@<other server>:feednotice/
-  ```
-- **Keep `.env`** safe: without `SECRET`, restored subscribers' unsubscribe links stop working.
-- **The DKIM key** lives in the same volume, so the backups carry it.
+then `docker compose up -d`. The repository is created on first start. Every night, half an hour
+after the local copy, the latest copy goes out; snapshots are kept 14 days, then one a week for
+4 weeks, so an erased address leaves the backups within about five weeks. Every Sunday a restore
+test restores the latest snapshot, checks the database's integrity, and verifies 5% of the
+repository's data.
+
+Both report to the app: the daily report shows the last backup and restore test, and an alert
+goes out if no backup succeeded for 36 hours or a restore test fails. By hand:
+
+```sh
+docker compose run --rm backup backup-now      # send the latest copy now
+docker compose run --rm backup restore-test    # prove a restore works
+docker compose run --rm backup restic snapshots
+```
+
+**Restoring** onto a new server: install as above with the same `.env`, then
+
+```sh
+docker compose run --rm -v "$PWD/restore:/restore" backup restic restore latest --target /restore
+docker compose stop app
+docker compose cp restore/data/backups/<latest>.sqlite app:/app/data/feednotice.sqlite
+docker compose cp restore/data/dkim app:/app/data/
+docker compose start app
+```
+
+- **Keep `.env` safe, outside the server too** (a password manager): without `SECRET`, restored
+  subscribers' unsubscribe links stop working, and without `RESTIC_PASSWORD` the backups cannot
+  be read at all.
 - Snapshots of the whole server, if your provider offers them, are a further layer.
 
 ## Updating
 
+Read the release's notes ([CHANGELOG.md](../CHANGELOG.md)) for anything marked **Upgrading**, then:
+
 ```sh
-cd /opt/feednotice && git pull && docker compose build && docker compose up -d
+cd /opt/feednotice
+git fetch --tags && git checkout v0.3.0                 # the new version
+sed -i 's/^FEEDNOTICE_VERSION=.*/FEEDNOTICE_VERSION=0.3.0/' .env
+docker compose pull && docker compose up -d
 ```
 
-- The database schema is migrated at start-up; a database newer than the code is refused.
+- The database schema is migrated at start-up; a database newer than the code is refused, so
+  going back to an older version means restoring a backup.
 - Postfix's queue lives in the `mta-spool` volume. Mail waiting to go out survives restarts and
   updates.
 
@@ -205,7 +247,8 @@ cd /opt/feednotice && git pull && docker compose build && docker compose up -d
 | Command | Effect |
 |---|---|
 | `docker compose logs -f app` | feed reads, sends, errors (no email or IP address in the logs) |
-| `docker compose logs -f mta` | Postfix: every delivery, bounce and deferral |
+| `docker compose exec mta tail -f /var/log/postfix/mail.log` | Postfix: every delivery, bounce and deferral, live |
+| `docker compose exec mta maillog` | the whole mail log kept (14 days, `MTA_LOG_DAYS`) |
 | `docker compose exec mta postqueue -p` | mail waiting to go out |
 | `docker compose exec app node src/cli.ts poll` | one round now (the built-in scheduler already runs every minute) |
 | `docker compose exec app node src/cli.ts purge` | GDPR erasure now (runs hourly anyway) |

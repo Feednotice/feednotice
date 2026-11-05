@@ -113,6 +113,50 @@ describe('immediate sending', () => {
   });
 });
 
+describe('immediate pass, incremental', () => {
+  it('after a first complete pass, still sends what a late confirmation or a cadence switch is owed', async () => {
+    const { ctx, publish } = setup();
+    publish('a');
+    await sendImmediate(ctx);
+    assert.equal(ctx.mailer.messages.length, 1);
+    // A request made before "b" and "c", confirmed hours after the last pass.
+    ctx.clock.t += MINUTE;
+    ctx.db.prepare("INSERT INTO subscribers (email, created_at) VALUES ('late@exemple.fr', 0)").run();
+    ctx.db.prepare("INSERT INTO subscriptions (subscriber_id, feed_id, cadence, status, created_at) VALUES (2, 1, 'immediate', 'pending', ?)").run(ctx.now());
+    publish('b');
+    publish('c');
+    await sendImmediate(ctx);
+    ctx.clock.t += 5 * HOUR;
+    ctx.db.prepare("UPDATE subscriptions SET status = 'active', confirmed_at = ? WHERE id = 2").run(ctx.now());
+    await sendImmediate(ctx);
+    assert.deepEqual(ctx.mailer.messages.filter((m) => m.to === 'late@exemple.fr').map((m) => m.subject), ['Title b', 'Title c']);
+    // A digest subscriber switching to one email per item gets what the digest had not sent yet.
+    ctx.clock.t += MINUTE;
+    ctx.db.prepare("INSERT INTO subscribers (email, created_at) VALUES ('digest@exemple.fr', 0)").run();
+    ctx.db.prepare("INSERT INTO subscriptions (subscriber_id, feed_id, cadence, status, created_at, confirmed_at) VALUES (3, 1, 'daily', 'active', ?, ?)").run(ctx.now(), ctx.now());
+    publish('d');
+    await sendImmediate(ctx);
+    ctx.clock.t += 3 * HOUR;
+    const { setCadence } = await import('../src/subscriptions.ts');
+    setCadence(ctx, 3, 3, 'immediate');
+    await sendImmediate(ctx);
+    assert.deepEqual(ctx.mailer.messages.filter((m) => m.to === 'digest@exemple.fr').map((m) => m.subject), ['Title d']);
+  });
+
+  it('does not move past what a pass held back by the sending cap left', async () => {
+    const { ctx, publish } = setup('immediate', { mailMaxPerHour: 4 });
+    publish('a', 'b', 'c', 'd', 'e');
+    const first = await sendImmediate(ctx);
+    assert.equal(first.deferred, true);
+    ctx.clock.t += 2 * HOUR;
+    publish('f');
+    await sendImmediate(ctx);
+    ctx.clock.t += HOUR;
+    await sendImmediate(ctx);
+    assert.deepEqual(ctx.mailer.messages.map((m) => m.subject).sort(), ['Title a', 'Title b', 'Title c', 'Title d', 'Title e', 'Title f']);
+  });
+});
+
 describe('language', () => {
   it("writes to each subscriber in their own language", async () => {
     const { ctx, publish } = setup('immediate', { burstLimit: 1 });

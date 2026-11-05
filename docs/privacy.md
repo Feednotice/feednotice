@@ -58,7 +58,8 @@ documentation, not legal advice.
 | Log | Content | Retention |
 |---|---|---|
 | `app` container | feed reads, counts of sent emails, errors: **no email or IP address** | rotated by size (3 × 10 MB) |
-| `mta` container (Postfix) | every delivery, bounce and deferral: **recipient addresses** and remote server names | rotated by size (3 × 10 MB, see `compose.yaml`), i.e. a few days to a few weeks depending on volume. [To confirm, or switch to a time-based limit] |
+| `backup` container | snapshot ids and file names, no address | rotated by size |
+| `mta` container (Postfix) | every delivery, bounce and deferral: **recipient addresses** and remote server names | a file in the `mta-logs` volume, started anew every night; days older than `MTA_LOG_DAYS` (14) are deleted |
 | `caddy` container | errors only; access logging is off | rotated by size |
 
 Legal basis: legitimate interest (security, delivery troubleshooting).
@@ -101,7 +102,7 @@ To set at deployment in `.env`:
 | Subscriptions to a dead feed | Ended 30 days after the feed is declared dead (subscribers are told); a lone address is then erased | `src/purge.ts` |
 | Feeds and entries (public data, not personal) | While a subscription exists | `src/purge.ts` |
 | Mail queue (messages waiting to be delivered) | At most 2 days (`maximal_queue_lifetime`) | `docker/mta/entrypoint.sh` |
-| Backups | 14 copies, one a day (`backup 14`): an erased address disappears from backups within 14 days | [off-site copy: keep the same retention] |
+| Backups | On the server: 14 nightly copies (`BACKUP_KEEP`). Off the server (optional `backup` container): encrypted, 14 daily then 4 weekly snapshots. An erased address leaves the backups within about five weeks | `src/backup.ts`, `docker/backup/` |
 
 ## 4. Security (article 32)
 

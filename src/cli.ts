@@ -12,7 +12,8 @@
 // Outside Docker, a .env file at the project root is read too.
 
 import { createPrivateKey, createPublicKey, generateKeyPairSync } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { backup } from './backup.ts';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { loadConfig } from './config.ts';
 import type { Ctx } from './context.ts';
@@ -60,7 +61,7 @@ async function main(): Promise<void> {
       ctx.log(`purge: ${JSON.stringify(purge(ctx))}`);
       process.exit(0);
     case 'backup':
-      backup(ctx, Number(process.argv[3] ?? 14));
+      ctx.log(`backup: ${backup(ctx, Number(process.argv[3] ?? config.backupKeep ?? 14))}`);
       process.exit(0);
     case 'bounce': {
       const chunks: Buffer[] = [];
@@ -103,17 +104,6 @@ async function main(): Promise<void> {
   };
   setInterval(tick, 60_000).unref();
   void tick();
-}
-
-/** Consistent copy (VACUUM INTO) while the service keeps running; keeps the last `keep` copies. */
-function backup(ctx: Ctx, keep: number): void {
-  const dir = join(dirname(ctx.config.dbPath), 'backups');
-  mkdirSync(dir, { recursive: true });
-  const file = join(dir, `feednotice-${new Date().toISOString().replace(/[:.]/g, '-')}.sqlite`);
-  ctx.db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
-  const all = readdirSync(dir).filter((f) => /^feednotice-.*\.sqlite$/.test(f)).sort();
-  for (const old of all.slice(0, Math.max(0, all.length - keep))) rmSync(join(dir, old));
-  ctx.log(`backup: ${file}`);
 }
 
 /** Creates an RSA 2048 key for DKIM signing (unless it exists) and prints the DNS TXT record. */

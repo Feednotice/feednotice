@@ -7,7 +7,9 @@ RUN apk add --no-cache postfix ca-certificates curl openssl tzdata
 
 COPY entrypoint.sh /usr/local/bin/entrypoint
 COPY forward-bounce.sh /usr/local/bin/forward-bounce
-RUN chmod 755 /usr/local/bin/entrypoint /usr/local/bin/forward-bounce
+COPY rotate-maillog.sh /usr/local/bin/rotate-maillog
+COPY maillog.sh /usr/local/bin/maillog
+RUN chmod 755 /usr/local/bin/entrypoint /usr/local/bin/forward-bounce /usr/local/bin/rotate-maillog /usr/local/bin/maillog
 
 EXPOSE 25 2525
 ENTRYPOINT ["/usr/local/bin/entrypoint"]

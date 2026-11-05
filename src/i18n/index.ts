@@ -40,7 +40,15 @@ export function negotiate(explicit: string | null | undefined, acceptLanguage: s
   return fallback;
 }
 
+const dateFormats = new Map<string, Intl.DateTimeFormat>();
+
 export function formatDate(locale: Locale, timeZone: string, ms: number | Date | null): string {
   if (ms === null) return '';
-  return new Intl.DateTimeFormat(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'long', timeZone }).format(ms instanceof Date ? ms : new Date(ms));
+  const key = `${locale}|${timeZone}`;
+  let f = dateFormats.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'long', timeZone });
+    dateFormats.set(key, f);
+  }
+  return f.format(ms instanceof Date ? ms : new Date(ms));
 }

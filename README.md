@@ -14,6 +14,7 @@ HTTPS proxy, all in Docker.
 - [Privacy](docs/privacy.md): what is stored, for how long; a starting point for your GDPR register
 - [For publishers](docs/for-publishers.md): the link to add next to a feed, WebSub, the publisher space
 - [Name and logo](TRADEMARKS.md): run the code under your own name
+- [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
 ## What it does
 
@@ -56,7 +57,7 @@ Reader ─────────────▶ caddy ──▶ app ───�
 
 ```sh
 cp .env.example .env    # then fill in the name, secrets and domains
-docker compose build
+docker compose pull     # released images (or: docker compose build)
 docker compose run --rm app node src/cli.ts dkim-keygen    # prints the DKIM DNS record
 docker compose up -d
 ```
@@ -70,6 +71,7 @@ npm install
 npm test              # feed parsing, deduplication, sending, i18n, bounces, full HTTP journey
 npm run typecheck
 npm start             # http://localhost:8080 — emails are written to data/outbox/*.eml
+npm run bench         # load test: 100,000 subscribers, 5,000 feeds (docs/design.md §13)
 ```
 
 To subscribe locally, open `http://localhost:8080/s?feed=<feed address>`, then follow the link
@@ -82,7 +84,7 @@ in the email dropped into `data/outbox/`. Add `&lang=fr` for French.
 | `node src/cli.ts serve` | web server + built-in scheduler (feeds, sending, hourly purge) |
 | `node src/cli.ts poll` | one full round, then exit |
 | `node src/cli.ts purge` | GDPR erasure only |
-| `node src/cli.ts backup [keep]` | consistent copy of the database into `data/backups/`, keeping the last `keep` (14) |
+| `node src/cli.ts backup [keep]` | consistent copy of the database into `data/backups/`, keeping the last `keep` (14); also runs nightly |
 | `node src/cli.ts dkim-keygen` | creates the DKIM key (unless it exists) and prints the DNS record |
 | `node src/cli.ts bounce < message` | reads one bounce from standard input (manual use) |
 | `node src/cli.ts doctor` | checks settings, DNS (A, PTR, MX, SPF, DKIM, DMARC), port 25, HTTPS, Spamhaus |
@@ -108,6 +110,9 @@ lists them with example values.
 | `MAIL_MAX_PER_DAY`, `MAIL_MAX_PER_HOUR` | `0` (no cap) | warm-up caps; 10% kept for confirmation emails |
 | `CONFIRM_MAX_PER_HOUR` | `300` | confirmation emails per hour, all visitors together (0 = no ceiling) |
 | `OPS_EMAIL`, `OPS_REPORT_HOUR` | —, `8` | operator's address for the daily report and alerts |
+| `BACKUP_HOUR`, `BACKUP_KEEP` | `3`, `14` | nightly local copy of the database, and how many are kept |
+| `COMPOSE_PROFILES=backup`, `RESTIC_*`, `AWS_*` | off | encrypted off-site backups with a weekly restore test ([deploy](docs/deploy.md#backups)) |
+| `MTA_LOG_DAYS` | `14` | days of mail log kept (it holds recipient addresses) |
 | `OPERATOR_NAME`, `CONTACT_EMAIL`, `PROCESSORS` | — | shown on the privacy page and in emails |
 | `LEGAL_*`, `HOST_*` | — | legal notice at `/legal`: publisher, registration, publication director, host |
 | `SOURCE_URL` | this repository | "Source code" link in every page footer (AGPL): point it to your copy if you change the code |
@@ -141,11 +146,13 @@ src/
   websub.ts          WebSub: hub subscription, verification, signed notifications
   stats.ts, ops.ts   operator counters, daily report, alerts
   doctor.ts          setup checker
+  backup.ts          nightly local copies, off-site backup status
   i18n/              en (reference) and fr message catalogs
   mail/              templates, SMTP sending with DKIM, sending caps, bounce parsing
   web/               HTTP server, pages without JavaScript, branding
   db.ts              SQLite schema and migrations
-docker/mta/          send-only Postfix image
+docker/mta/          send-only Postfix image (mail log kept 14 days)
+docker/backup/       restic image: encrypted off-site backups, weekly restore test
 docker/caddy/        Caddyfile
 test/                tests, including a real civic feed (anonymised) with its quirks as a reference case
 ```

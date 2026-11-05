@@ -1,5 +1,6 @@
 // Configuration from environment variables (in Docker, from the .env file via compose).
 
+import { readFileSync } from 'node:fs';
 import type { Locale } from './i18n/index.ts';
 import { isLocale } from './i18n/index.ts';
 
@@ -70,11 +71,19 @@ export interface Config {
   opsEmail: string;
   /** Hour (service time zone) of the daily report. */
   opsReportHour: number;
+  /** Nightly local copies of the database: hour, and how many are kept (0 = none). */
+  backupHour: number;
+  backupKeep: number;
+  /** Where the backup container reports (empty = no off-site backup set up). */
+  backupStatusDir: string;
   trustProxy: boolean;
   /** Local tests only: allows reading feeds on private addresses. */
   allowPrivateFeeds: boolean;
   runScheduler: boolean;
 }
+
+/** This version of the software (package.json). */
+export const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 /** The upstream source code: the right SOURCE_URL for an unmodified copy. */
 export const UPSTREAM_SOURCE = 'https://github.com/Feednotice/feednotice';
@@ -122,7 +131,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     mailMaxPerHour: int(env.MAIL_MAX_PER_HOUR, 0),
     mailMaxPerDay: int(env.MAIL_MAX_PER_DAY, 0),
     confirmMaxPerHour: int(env.CONFIRM_MAX_PER_HOUR, 300),
-    userAgent: env.USER_AGENT ?? `FeedNotice/0.1 (${serviceName}; +${baseUrl}/robot; ${contactEmail})`,
+    userAgent: env.USER_AGENT ?? `FeedNotice/${VERSION} (${serviceName}; +${baseUrl}/robot; ${contactEmail})`,
     pollIntervalMinutes: int(env.POLL_INTERVAL_MINUTES, 30),
     minPollIntervalMinutes: 15,
     maxPollIntervalMinutes: 60,
@@ -135,6 +144,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     webhookSecret: env.WEBHOOK_SECRET ?? '',
     opsEmail: env.OPS_EMAIL ?? '',
     opsReportHour: int(env.OPS_REPORT_HOUR, 8),
+    backupHour: int(env.BACKUP_HOUR, 3),
+    backupKeep: int(env.BACKUP_KEEP, 14),
+    backupStatusDir: env.BACKUP_STATUS_DIR ?? '',
     trustProxy: env.TRUST_PROXY === '1',
     allowPrivateFeeds: env.ALLOW_PRIVATE_FEEDS === '1',
     runScheduler: env.RUN_SCHEDULER !== '0',
