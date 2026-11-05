@@ -1,5 +1,5 @@
-# On a version tag (v1.2.3): the tests, then the three images on GitHub's registry, then a
-# GitHub release with the changelog's section for that version.
+# On a version tag (v1.2.3), pushed or created with a release on GitHub: the tests, then the
+# three images on GitHub's registry, then the release's notes from the changelog.
 name: Release
 
 on:
@@ -78,7 +78,12 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           awk -v v="$version" '$0 ~ "^## " v "( |$)" {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
           test -s notes.md
-      - name: Create the release
+      - name: Create the release, or fill in the one made with the tag on GitHub
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
+          fi
