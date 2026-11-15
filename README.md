@@ -11,6 +11,7 @@ HTTPS proxy, all in Docker.
 - **[Deploy](docs/deploy.md)**: server, DNS, install, checks, warm-up, backups
 - [Design](docs/design.md): journey, architecture, data model, deduplication, deliverability
 - [Branding](docs/branding.md): your service's name, logo, favicons and colours
+- [Your own pages](docs/pages.md): pricing, help, news (with its own feed), for search engines
 - [Privacy](docs/privacy.md): what is stored, for how long; a starting point for your GDPR register
 - [For publishers](docs/for-publishers.md): the link to add next to a feed, WebSub, the publisher space
 - [Name and logo](TRADEMARKS.md): run the code under your own name
@@ -118,6 +119,7 @@ lists them with example values.
 | `LEGAL_*`, `HOST_*` | — | legal notice at `/legal`: publisher, registration, publication director, host |
 | `SOURCE_URL` | this repository | "Source code" link in every page footer (AGPL): point it to your copy if you change the code |
 | `BRAND_PATH` | none (neutral) | folder with your logo, favicons and colours ([docs/branding.md](docs/branding.md)) |
+| `PAGES_PATH` | none | folder with your own pages and news ([docs/pages.md](docs/pages.md)) |
 | `POLL_INTERVAL_MINUTES` | `30` | bounded to 15–60 |
 | `PENDING_TTL_DAYS`, `SUSPENDED_TTL_DAYS` | `7`, `90` | erasure of unconfirmed requests and suspended addresses |
 | `DIGEST_HOUR`, `DIGEST_WEEKDAY`, `TIME_ZONE` | `7`, `1` (Monday), `Europe/Paris` | default digest schedule; subscribers can choose their own |
@@ -151,7 +153,7 @@ src/
   backup.ts          nightly local copies, off-site backup status
   i18n/              en (reference) and fr message catalogs
   mail/              templates, SMTP sending with DKIM, sending caps, bounce parsing
-  web/               HTTP server, pages without JavaScript, branding
+  web/               HTTP server, pages without JavaScript, branding, the operator's pages
   db.ts              SQLite schema and migrations
 docker/mta/          send-only Postfix image (mail log kept 14 days)
 docker/backup/       restic image: encrypted off-site backups, weekly restore test

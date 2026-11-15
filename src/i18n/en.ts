@@ -281,6 +281,10 @@ export const en = {
   publishedBy: (name: string) => `Published by ${name}`,
   verifiedDomain: (domain: string) => `verified domain ${domain}`,
 
+  newsTitle: 'News',
+  newsFollow: 'Follow this news:',
+  newsByEmail: 'by email',
+  newsFeed: 'Atom feed',
   // Robot
   robotTitle: 'The robot',
   robotHeading: 'The robot that reads your feeds',

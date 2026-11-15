@@ -35,6 +35,8 @@ export interface Config {
   sourceUrl: string;
   /** Folder with the operator's logo, favicons and colours (docs/branding.md); empty = neutral. */
   brandDir: string;
+  /** Folder with the operator's own pages and news (docs/pages.md); empty = none. */
+  pagesDir: string;
   defaultLocale: Locale;
   /** From address of subscription emails. */
   mailFrom: string;
@@ -120,6 +122,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     sourceUrl: env.SOURCE_URL || UPSTREAM_SOURCE,
     brandDir: env.BRAND_DIR ?? '',
+    pagesDir: env.PAGES_DIR ?? '',
     defaultLocale: isLocale(env.DEFAULT_LOCALE) ? env.DEFAULT_LOCALE : 'en',
     mailFrom,
     replyTo: env.REPLY_TO ?? contactEmail,

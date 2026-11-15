@@ -15,6 +15,7 @@ import {
 } from '../publishers.ts';
 import type { SubscriptionListItem } from '../subscriptions.ts';
 import type { Brand } from './brand.ts';
+import { navPages, newsItems, type SitePage } from './pages.ts';
 
 /** What every page needs: configuration, language, and the address to switch language on. */
 export interface Page {
@@ -64,11 +65,20 @@ function brandMark(brand: Brand): string {
   return `<picture><source media="(prefers-color-scheme: dark)" srcset="/brand/mark-dark.svg">${img}</picture>`;
 }
 
-export function layout(p: Page, title: string, body: string): string {
+/** Absolute URL of this page in a language: canonical and alternate links for search engines. */
+function absoluteIn(p: Page, locale: Locale): string {
+  return `${p.config.baseUrl}${withLang(p.here, locale)}`;
+}
+
+export function layout(p: Page, title: string, body: string, opts: { description?: string } = {}): string {
   const { config, m, locale } = p;
   const switcher = LOCALES.filter((l) => l !== locale)
     .map((l) => `<a href="${esc(withLang(p.here, l))}" hreflang="${l}" lang="${l}">${esc(messages(l).langName)}</a>`).join(' · ');
   const link = (path: string, label: string) => `<a href="${esc(withLang(path, locale))}">${esc(label)}</a>`;
+  const pages = p.brand.pages;
+  const news = pages ? newsItems(pages, locale, config.defaultLocale) : [];
+  const extra = pages ? navPages(pages, locale, config.defaultLocale) : [];
+  const own = [...extra.map((pg) => link(pg.path, pg.title)), ...(news.length ? [link('/news', m.newsTitle)] : [])];
   return `<!doctype html>
 <html lang="${locale}">
 <head>
@@ -76,7 +86,9 @@ export function layout(p: Page, title: string, body: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>${esc(title)} — ${esc(config.serviceName)}</title>
-<link rel="stylesheet" href="/style.css">
+${opts.description ? `<meta name="description" content="${esc(opts.description)}">\n` : ''}<link rel="canonical" href="${esc(absoluteIn(p, locale))}">
+${LOCALES.map((l) => `<link rel="alternate" hreflang="${l}" href="${esc(absoluteIn(p, l))}">`).join('\n')}
+${news.length ? `<link rel="alternate" type="application/atom+xml" title="${esc(m.newsTitle)} — ${esc(config.serviceName)}" href="/news.xml?lang=${locale}">\n` : ''}<link rel="stylesheet" href="/style.css">
 ${brandLinks(p.brand)}</head>
 <body>
 <header><a class="brand" href="${esc(withLang('/', locale))}">${brandMark(p.brand)}${esc(config.serviceName)}</a><nav aria-label="${esc(m.languageSwitch)}">${switcher}</nav></header>
@@ -84,11 +96,29 @@ ${brandLinks(p.brand)}</head>
 ${body}
 </main>
 <footer>
-${link('/privacy', m.nav.privacy)} · ${link('/account', m.nav.account)} · ${link('/publishers', m.nav.publishers)} · ${link('/robot', m.nav.robot)}<br>
+${own.length ? `${own.join(' · ')}<br>\n` : ''}${link('/privacy', m.nav.privacy)} · ${link('/account', m.nav.account)} · ${link('/publishers', m.nav.publishers)} · ${link('/robot', m.nav.robot)}<br>
 ${link('/terms', m.nav.terms)} · ${link('/legal', m.nav.legal)} · <a href="${esc(config.sourceUrl)}">${esc(m.nav.source)}</a>
 </footer>
 </body>
 </html>`;
+}
+
+/** One of the operator's pages (src/web/pages.ts). */
+export function sitePage(p: Page, page: SitePage): string {
+  const date = page.date !== null ? `<p class="muted">${esc(formatDate(p.locale, p.config.timeZone, page.date))}</p>\n` : '';
+  return layout(p, page.title, `<article class="page">\n${date}${page.html}\n</article>`, { description: page.description });
+}
+
+/** The list of news items, with the feed to follow them. */
+export function newsPage(p: Page, items: SitePage[]): string {
+  const { m, locale, config } = p;
+  const feed = `${config.baseUrl}/news.xml?lang=${locale}`;
+  return layout(p, m.newsTitle, `
+<h1>${esc(m.newsTitle)}</h1>
+<ul class="entries">
+${items.map((i) => `<li><span class="title"><a href="${esc(withLang(i.path, locale))}">${esc(i.title)}</a></span><br><span class="muted">${esc(formatDate(locale, config.timeZone, i.date))}</span>${i.description ? `<br>${esc(i.description)}` : ''}</li>`).join('\n')}
+</ul>
+<p class="muted">${esc(m.newsFollow)} <a href="${esc(withLang(`/s?feed=${encodeURIComponent(feed)}`, locale))}">${esc(m.newsByEmail)}</a> · <a href="${esc(feed)}">${esc(m.newsFeed)}</a></p>`, { description: m.newsTitle });
 }
 
 export const STYLE = `
@@ -132,6 +162,13 @@ textarea { width: 100%; min-height: 6rem; font: inherit; padding: .5rem; border:
 .cta { display: inline-block; padding: .5rem 1.2rem; border: 1px solid var(--accent); border-radius: 4px; text-decoration: none; }
 .faq dt { font-weight: bold; margin-top: 1rem; }
 .faq dd { margin: .2rem 0 0; }
+.page img { max-width: 100%; height: auto; }
+.page table { margin: 1rem 0; }
+.page .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+.page .plan { border: 1px solid var(--border); border-radius: 6px; padding: .8rem 1rem; }
+.page .plan h2, .page .plan h3 { margin-top: 0; }
+.page .price { font-size: 1.4rem; font-weight: bold; }
+.page .note { border-left: 4px solid var(--accent); padding: .5rem 1rem; }
 .check label { display: inline; font-weight: normal; }
 code.proof { word-break: break-all; }
 `;
@@ -151,7 +188,7 @@ ${feedUrlForm(p, '')}
 <p>${esc(h.publishersText(config.serviceName))}</p>
 <p><a class="cta" href="${esc(withLang('/publishers', p.locale))}">${esc(h.publishersCta)}</a></p>
 <h2>${esc(h.faqHeading)}</h2>
-<dl class="faq">${h.faq.map((f) => `<dt>${esc(f.q)}</dt><dd>${esc(f.a)}</dd>`).join('')}</dl>`);
+<dl class="faq">${h.faq.map((f) => `<dt>${esc(f.q)}</dt><dd>${esc(f.a)}</dd>`).join('')}</dl>`, { description: m.homeIntro(config.serviceName) });
 }
 
 export function feedUrlForm(p: Page, value: string, error?: string): string {

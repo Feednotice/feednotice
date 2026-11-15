@@ -3,12 +3,15 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Pages } from './pages.ts';
 
 export interface Brand {
   /** Files served as they are, by URL path. */
   files: Map<string, { type: string; body: Buffer }>;
   /** Appended to the site's stylesheet: typically CSS variables (--accent…). */
   css: string;
+  /** The operator's own pages (PAGES_DIR), when there are any. */
+  pages?: Pages;
 }
 
 export const NO_BRAND: Brand = { files: new Map(), css: '' };

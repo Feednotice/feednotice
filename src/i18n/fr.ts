@@ -241,6 +241,10 @@ export const fr: Messages = {
   publishedBy: (name) => `Publié par ${name}`,
   verifiedDomain: (domain) => `domaine vérifié ${domain}`,
 
+  newsTitle: 'Actualités',
+  newsFollow: 'Suivre ces actualités :',
+  newsByEmail: 'par courriel',
+  newsFeed: 'flux Atom',
   robotTitle: 'Le robot',
   robotHeading: 'Le robot qui lit vos flux',
   robotIntro: (service) =>
