@@ -228,6 +228,10 @@ export const de: Messages = {
     failed: 'Der Nachweis wurde noch nicht gefunden. Änderungen im DNS können eine Weile brauchen, bis sie sichtbar sind.',
     invalid: 'Das sieht nicht wie ein Domainname aus.',
     limit: 'Sie haben die maximale Anzahl an Domains erreicht.',
+    'logo-saved': 'Das Logo ist gespeichert.',
+    'logo-removed': 'Das Logo ist entfernt.',
+    'logo-domain': 'Das Logo muss auf einer Ihrer verifizierten Domains liegen.',
+    'logo-invalid': 'Unter dieser Adresse liegt kein PNG-, JPEG- oder WebP-Bild von höchstens 100 KB.',
     saved: 'Gespeichert.',
   },
   publisherFeedsHeading: 'Ihre Feeds',
@@ -242,6 +246,19 @@ export const de: Messages = {
   publisherDeletedTitle: 'Bereich für Herausgeber gelöscht',
   publisherDeletedText: 'Ihre Adresse, Ihr Profil und Ihre Domains sind gelöscht. Ihre Leserinnen und Leser behalten ihre Abonnements.',
   publisherExpiredText: 'Dieser Link ist nicht mehr gültig. Fordern Sie auf der Seite „Herausgeber“ einen neuen an.',
+  publisherPlanUntil: (date) => `bis ${date}`,
+  publisherProHint: (plan) => `Mit dem Tarif ${plan}: Ihr Logo auf der Abonnementseite, Ihr Begrüßungstext in der Bestätigungs-E-Mail sowie Bestätigungen und Abmeldungen Woche für Woche.`,
+  publisherLogoHeading: 'Logo',
+  publisherLogoLabel: 'Adresse Ihres Logos',
+  publisherLogoHint: (kb) => `Ein PNG-, JPEG- oder WebP-Bild von höchstens ${kb} KB auf einer Ihrer verifizierten Domains. Es wird hierher kopiert: Die Browser der Leser laden es nie von Ihrer Website. Leeren Sie das Feld, um es zu entfernen.`,
+  publisherLogoSave: 'Logo speichern',
+  publisherGrowthHeading: 'Woche für Woche',
+  publisherGrowthIntro: (n) => `Bestätigte Abonnements und abgemeldete Leser pro Woche, für jeden Feed mit mindestens ${n} Abonnenten.`,
+  publisherGrowthNone: (n) => `Noch nichts zu zeigen: Ein Feed erscheint hier, sobald ihm mindestens ${n} Personen folgen.`,
+  publisherColWeek: 'Woche ab',
+  publisherColConfirmed: 'Bestätigt',
+  publisherColStopped: 'Abgemeldet',
+  logoAlt: (name) => `Logo von ${name}`,
   publishedBy: (name) => `Veröffentlicht von ${name}`,
   verifiedDomain: (domain) => `verifizierte Domain ${domain}`,
 
@@ -430,13 +447,14 @@ ${p.service}`,
       `Er wird weiterhin einmal täglich geprüft. Wenn er wieder erreichbar ist, wird der Versand automatisch fortgesetzt. Andernfalls endet dieses Abonnement am ${p.until}, und wenn es Ihr letztes ist, wird Ihre Adresse gelöscht. Sie müssen nichts tun.`,
       `Wenn die Website ihren Feed jetzt unter einer anderen Adresse veröffentlicht, abonnieren Sie den neuen über die Website.`,
     ],
+    welcomeFrom: (name) => `Ein Wort von ${name}:`,
     confirmSubject: (host) => `Bestätigen Sie Ihr Abonnement für neue Beiträge von ${host}`,
     confirmBody: (p) => `Guten Tag,
 
 jemand (vermutlich Sie) hat darum gebeten, die neuen Beiträge dieses Feeds per E-Mail zu erhalten:
 
   ${p.feed}
-  ${p.url}
+  ${p.url}${p.welcome}
 
 Häufigkeit: ${p.cadence}.
 

@@ -6,7 +6,8 @@ setting that must be changed is called out under **Upgrading**. Images:
 
 ## Unreleased
 
-**Upgrading**: the database schema goes from 4 to 5 at start-up (a table of blocks). New
+**Upgrading**: the database schema goes from 4 to 6 at start-up (blocks; publisher plans, logos
+and weekly counts). New
 optional settings: `PAGES_PATH`, and `SMTP_*` in `.env` to send through a provider's relay.
 
 - **German and Spanish** pages and emails, to be reviewed by native speakers
@@ -19,6 +20,10 @@ optional settings: `PAGES_PATH`, and `SMTP_*` in `.env` to send through a provid
   confirmed.
 - **Relay fallback**: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` in `.env` switch sending
   to a provider's relay, with TLS ([deploy](docs/deploy.md#if-the-sending-ip-gets-blocklisted)).
+- **Paid publisher plans**, set by the operator (`publisher plan`, `publishers`), with an end
+  date: a logo on the subscribe page, the welcome text in the confirmation email, and
+  confirmations and departures week by week. No price in the code; readers never affected
+  ([docs/for-publishers.md](docs/for-publishers.md#paid-plans)).
 - **WordPress plugin**: the email link or button after posts, in a widget, as a shortcode
   ([integrations/wordpress](integrations/wordpress/README.md)).
 

@@ -17,8 +17,8 @@ import {
   stopDigests, unsubscribe, type MailEventType,
 } from '../subscriptions.ts';
 import {
-  addDomain, defaultVerifyDeps, deletePublisher, listDomains, openPublisher, publisherForFeedUrl, publisherStats,
-  removeDomain, requestPublisherLink, updateProfile, verifyDomain,
+  addDomain, defaultLogoDeps, defaultVerifyDeps, deletePublisher, effectivePlan, listDomains, logoImage, logoPath, openPublisher,
+  publisherForLoadedFeed, publisherGrowth, publisherStats, removeDomain, requestPublisherLink, setLogo, updateProfile, verifyDomain,
 } from '../publishers.ts';
 import { count } from '../stats.ts';
 import { fingerprint, verifyEmailToken, verifyToken } from '../tokens.ts';
@@ -98,17 +98,10 @@ function authorized(ctx: Ctx, req: Req): boolean {
   return timingSafeEqual(digest(req.headers.authorization ?? ''), digest(`Bearer ${webhookSecret}`));
 }
 
-/**
- * A verified publisher's name is shown only if the feed was really served by their site: a
- * redirect (an open redirect on their domain, say) must not lend it to someone else's feed.
- */
-function brandingFor(ctx: Ctx, loaded: { url: string; fetched: { finalUrl: string } }): ReturnType<typeof publisherForFeedUrl> {
-  try {
-    if (new URL(loaded.url).host !== new URL(loaded.fetched.finalUrl).host) return null;
-  } catch {
-    return null;
-  }
-  return publisherForFeedUrl(ctx, loaded.url);
+/** The verified publisher shown on a subscribe page, with their logo if their plan includes it. */
+function brandingFor(ctx: Ctx, loaded: { url: string; fetched: { finalUrl: string } }): v.PublisherBranding | null {
+  const pub = publisherForLoadedFeed(ctx, loaded);
+  return pub ? { name: pub.name, welcome_text: pub.welcome_text, domain: pub.domain, logo: logoPath(ctx, pub) } : null;
 }
 
 export function createServer(ctx: Ctx): http.Server {
@@ -176,7 +169,11 @@ async function handle(ctx: Ctx, brand: Brand, req: Req, res: Res): Promise<void>
     if (method === 'GET') {
       if (isLocale(explicitLang) && explicitLang !== publisher.locale) ctx.db.prepare('UPDATE publishers SET locale = ? WHERE id = ?').run(explicitLang, publisher.id);
       const fresh = openPublisher(ctx, email, p.locale);
-      return send(res, 200, v.publisherPage(p, path, fresh, listDomains(ctx, fresh.id), publisherStats(ctx, fresh.id), url.searchParams.get('result')));
+      const stats = publisherStats(ctx, fresh.id);
+      const plan = effectivePlan(fresh, now);
+      return send(res, 200, v.publisherPage(p, path, fresh, listDomains(ctx, fresh.id), stats, url.searchParams.get('result'), {
+        plan, logo: logoPath(ctx, fresh), growth: plan === 'free' ? null : publisherGrowth(ctx, stats),
+      }));
     }
     if (form) {
       const action = form.get('action');
@@ -196,6 +193,11 @@ async function handle(ctx: Ctx, brand: Brand, req: Req, res: Res): Promise<void>
         result = r === 'added' ? '' : r;
       }
       if (action === 'remove' && owned) removeDomain(ctx, publisher.id, owned.id);
+      if (action === 'logo' && effectivePlan(publisher, now) !== 'free') {
+        // Each save fetches an image from the publisher's server: limited per account.
+        if (!allow(ctx.db, `pub-logo:${publisher.id}`, 20, HOUR, now)) return send(res, 429, v.messagePage(p, p.m.tooManyTitle, p.m.tooManyText));
+        result = await setLogo(ctx, publisher.id, form.get('logo') ?? '', ctx.publisherLogo ?? defaultLogoDeps(ctx));
+      }
       if (action === 'verify' && owned) {
         // Each check reaches out to the publisher's server or DNS: limited per account.
         if (!allow(ctx.db, `pub-verify:${publisher.id}`, 30, HOUR, now)) return send(res, 429, v.messagePage(p, p.m.tooManyTitle, p.m.tooManyText));
@@ -397,6 +399,15 @@ async function handle(ctx: Ctx, brand: Brand, req: Req, res: Res): Promise<void>
       if (typeof ev.email === 'string' && types.includes(ev.type as MailEventType)) handleMailEvent(ctx, ev.email, ev.type as MailEventType);
     }
     return send(res, 200, 'ok', 'text/plain; charset=utf-8');
+  }
+
+  // --- Publishers' logos, copied here so that readers never load anything from elsewhere ---
+  const lm = /^\/logo\/(\d+)-([0-9a-f]{16})$/.exec(path);
+  if (method === 'GET' && lm) {
+    const logo = logoImage(ctx, Number(lm[1]), lm[2]);
+    if (!logo) return send(res, 404, 'not found', 'text/plain; charset=utf-8');
+    // The address changes with the image: it can be cached for good.
+    return send(res, 200, logo.body, logo.type, { 'Cache-Control': 'public, max-age=31536000, immutable' });
   }
 
   // --- The operator's own pages, news and what search engines read ---

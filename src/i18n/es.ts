@@ -230,6 +230,10 @@ export const es: Messages = {
     failed: 'Todavía no se ha encontrado la prueba. Los cambios de DNS pueden tardar un tiempo en aparecer.',
     invalid: 'Esto no parece un nombre de dominio.',
     limit: 'Ha alcanzado el número máximo de dominios.',
+    'logo-saved': 'El logotipo se ha guardado.',
+    'logo-removed': 'El logotipo se ha quitado.',
+    'logo-domain': 'El logotipo debe estar en uno de sus dominios verificados.',
+    'logo-invalid': 'Esta dirección no ofrece una imagen PNG, JPEG o WebP de 100 KB como máximo.',
     saved: 'Guardado.',
   },
   publisherFeedsHeading: 'Sus fuentes',
@@ -244,6 +248,19 @@ export const es: Messages = {
   publisherDeletedTitle: 'Espacio de editor eliminado',
   publisherDeletedText: 'Su dirección, su perfil y sus dominios se han borrado. Sus lectores conservan sus suscripciones.',
   publisherExpiredText: 'Este enlace ya no es válido. Solicite uno nuevo desde la página Editores.',
+  publisherPlanUntil: (date) => `hasta el ${date}`,
+  publisherProHint: (plan) => `Con el plan ${plan}: su logotipo en la página de suscripción, su texto de bienvenida en el correo de confirmación, y las confirmaciones y bajas semana a semana.`,
+  publisherLogoHeading: 'Logotipo',
+  publisherLogoLabel: 'Dirección de su logotipo',
+  publisherLogoHint: (kb) => `Una imagen PNG, JPEG o WebP de ${kb} KB como máximo, en uno de sus dominios verificados. Se copia aquí: los navegadores de los lectores nunca la cargan desde su sitio. Deje el campo vacío para quitarlo.`,
+  publisherLogoSave: 'Guardar el logotipo',
+  publisherGrowthHeading: 'Semana a semana',
+  publisherGrowthIntro: (n) => `Suscripciones confirmadas y lectores que se dieron de baja, por semana, para cada fuente seguida por al menos ${n} personas.`,
+  publisherGrowthNone: (n) => `Nada que mostrar por ahora: una fuente aparece aquí en cuanto la siguen al menos ${n} personas.`,
+  publisherColWeek: 'Semana del',
+  publisherColConfirmed: 'Confirmadas',
+  publisherColStopped: 'Bajas',
+  logoAlt: (name) => `Logotipo de ${name}`,
   publishedBy: (name) => `Publicado por ${name}`,
   verifiedDomain: (domain) => `dominio verificado ${domain}`,
 
@@ -433,13 +450,14 @@ ${p.service}`,
       `Se sigue comprobando una vez al día. Si vuelve a funcionar, sus envíos se reanudarán automáticamente. De lo contrario, esta suscripción finalizará el ${p.until} y, si es la última, su dirección se borrará. No tiene que hacer nada.`,
       `Si el sitio web publica ahora su fuente en otra dirección, suscríbase a la nueva desde el sitio web.`,
     ],
+    welcomeFrom: (name) => `Unas palabras de ${name}:`,
     confirmSubject: (host) => `Confirme su suscripción a las novedades de ${host}`,
     confirmBody: (p) => `Hola:
 
 Alguien (probablemente usted) ha solicitado recibir por correo electrónico las novedades de:
 
   ${p.feed}
-  ${p.url}
+  ${p.url}${p.welcome}
 
 Frecuencia: ${p.cadence}.
 

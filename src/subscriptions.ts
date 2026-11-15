@@ -11,7 +11,8 @@ import { renderAlreadySubscribedMail, renderConfirmationMail, renderManageLinkMa
 import type { Cadence, FeedRow, SubscriberRow, SubscriptionRow } from './model.ts';
 import { CADENCES } from './model.ts';
 import { allow, DAY, HOUR } from './ratelimit.ts';
-import { count } from './stats.ts';
+import { hasExtras, publisherForLoadedFeed } from './publishers.ts';
+import { count, countFeedWeek } from './stats.ts';
 import { fingerprint, signToken } from './tokens.ts';
 
 /** Anti-abuse: far above normal use. */
@@ -90,7 +91,10 @@ export async function requestSubscription(
     sendInBackground(ctx, renderAlreadySubscribedMail(config, subscriber.locale, feed, email));
   } else {
     const token = signToken(config.secret, 'confirm', subscription.id, now + config.pendingTtlDays * DAY);
-    sendInBackground(ctx, renderConfirmationMail(config, subscriber.locale, feed, email, `${config.baseUrl}/c/${token}`, subscription.cadence), () => count(ctx, 'sub.requested'));
+    const publisher = publisherForLoadedFeed(ctx, loaded);
+    const welcome = publisher && hasExtras(publisher, now) && publisher.welcome_text.trim()
+      ? { name: publisher.name || publisher.domain, text: publisher.welcome_text } : null;
+    sendInBackground(ctx, renderConfirmationMail(config, subscriber.locale, feed, email, `${config.baseUrl}/c/${token}`, subscription.cadence, welcome), () => count(ctx, 'sub.requested'));
   }
   return { kind: 'sent' };
 }
@@ -107,6 +111,12 @@ export function getSubscription(ctx: Ctx, id: number): (SubscriptionRow & { feed
 export function confirmSubscription(ctx: Ctx, id: number): void {
   const res = ctx.db.prepare("UPDATE subscriptions SET status = 'active', confirmed_at = ? WHERE id = ? AND status = 'pending'").run(ctx.now(), id);
   count(ctx, 'sub.confirmed', Number(res.changes));
+  if (res.changes) countFeedWeek(ctx, 'confirmed', activeFeeds(ctx, 'id = ?', id));
+}
+
+/** Feeds of the active subscriptions matching the condition: their departures are counted per week. */
+function activeFeeds(ctx: Ctx, where: string, ...args: (number | string)[]): number[] {
+  return (ctx.db.prepare(`SELECT feed_id FROM subscriptions WHERE status = 'active' AND ${where}`).all(...args) as { feed_id: number }[]).map((r) => r.feed_id);
 }
 
 /** Deletes the subscription; if it was the last one, the address is erased. */
@@ -115,6 +125,7 @@ export function unsubscribe(ctx: Ctx, id: number): boolean {
   return transaction(db, () => {
     const sub = db.prepare('SELECT subscriber_id FROM subscriptions WHERE id = ?').get(id) as { subscriber_id: number } | undefined;
     if (!sub) return false;
+    countFeedWeek(ctx, 'stopped', activeFeeds(ctx, 'id = ?', id));
     db.prepare('DELETE FROM subscriptions WHERE id = ?').run(id);
     db.prepare('DELETE FROM subscribers WHERE id = ? AND NOT EXISTS (SELECT 1 FROM subscriptions WHERE subscriber_id = ?)').run(sub.subscriber_id, sub.subscriber_id);
     count(ctx, 'sub.stopped');
@@ -132,6 +143,7 @@ export function digestFeeds(ctx: Ctx, subscriberId: number, cadence: 'daily' | '
 export function stopDigests(ctx: Ctx, subscriberId: number, cadence: 'daily' | 'weekly'): number {
   const { db } = ctx;
   return transaction(db, () => {
+    countFeedWeek(ctx, 'stopped', activeFeeds(ctx, 'subscriber_id = ? AND cadence = ?', subscriberId, cadence));
     const res = db.prepare("DELETE FROM subscriptions WHERE subscriber_id = ? AND cadence = ? AND status = 'active'").run(subscriberId, cadence);
     db.prepare('DELETE FROM subscribers WHERE id = ? AND NOT EXISTS (SELECT 1 FROM subscriptions WHERE subscriber_id = ?)').run(subscriberId, subscriberId);
     count(ctx, 'sub.stopped', Number(res.changes));
@@ -141,6 +153,7 @@ export function stopDigests(ctx: Ctx, subscriberId: number, cadence: 'daily' | '
 
 export function deleteSubscriber(ctx: Ctx, subscriberId: number): void {
   const { n } = ctx.db.prepare('SELECT COUNT(*) AS n FROM subscriptions WHERE subscriber_id = ?').get(subscriberId) as { n: number };
+  countFeedWeek(ctx, 'stopped', activeFeeds(ctx, 'subscriber_id = ?', subscriberId));
   ctx.db.prepare('DELETE FROM subscribers WHERE id = ?').run(subscriberId);
   count(ctx, 'sub.stopped', n);
 }

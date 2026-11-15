@@ -45,7 +45,7 @@ const ASSET_TYPES: Record<string, string> = {
 };
 const SEGMENT = /^[a-z0-9][a-z0-9-]*$/;
 /** Paths the application serves itself: a page cannot take them. */
-const RESERVED = /^\/(s|c|u|m|p|account|publishers|privacy|terms|legal|robot|health|websub|hooks|brand|style\.css|favicon\.(ico|svg)|apple-touch-icon\.png|sitemap\.xml|robots\.txt|news\.xml)(\/|$)/;
+const RESERVED = /^\/(s|c|u|m|p|logo|account|publishers|privacy|terms|legal|robot|health|websub|hooks|brand|style\.css|favicon\.(ico|svg)|apple-touch-icon\.png|sitemap\.xml|robots\.txt|news\.xml)(\/|$)/;
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {

@@ -8,6 +8,8 @@
 //   node src/cli.ts stats [days]         operator counters per day, and the current state
 //   node src/cli.ts doctor               checks DNS, mail and HTTPS against the settings
 //   node src/cli.ts block feed|domain|address <value> [reason]   and unblock …, blocks (list)
+//   node src/cli.ts publisher plan <email|domain> free|pro|business [until YYYY-MM-DD]
+//   node src/cli.ts publishers           publishers with a verified domain or a paid plan
 //
 // Configuration comes from environment variables (the .env file, loaded by Docker Compose).
 // Outside Docker, a .env file at the project root is read too.
@@ -26,6 +28,7 @@ import { parseBounce } from './mail/bounce.ts';
 import { createMailer, recipientTagger } from './mail/mailer.ts';
 import { flushSends } from './mail/quota.ts';
 import { statsText } from './ops.ts';
+import { findPublisher, listPublishers, PLANS, setPlan, type Plan } from './publishers.ts';
 import { purge } from './purge.ts';
 import { handleMailEvent } from './subscriptions.ts';
 import { createServer } from './web/server.ts';
@@ -95,6 +98,33 @@ async function main(): Promise<void> {
       for (const b of feeds) console.log(`${b.kind.padEnd(6)} ${b.pattern}  ${new Date(b.created_at).toISOString().slice(0, 10)}  ${b.reason}`);
       console.log(`${feeds.length} feed(s) or domain(s); ${addresses} address(es) blocked (kept as fingerprints only)`);
       process.exit(0);
+    }
+    case 'publisher': {
+      const [sub, who, plan, until] = process.argv.slice(3);
+      const end = until ? Date.parse(`${until}T23:59:59Z`) : null;
+      if (sub !== 'plan' || !who || !(PLANS as readonly string[]).includes(plan ?? '') || (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) || Number.isNaN(end)) {
+        console.error('Usage: publisher plan <email|domain> free|pro|business [until YYYY-MM-DD]');
+        process.exitCode = 2;
+        break;
+      }
+      const publisher = findPublisher(ctx, who);
+      if (!publisher) {
+        console.error('No publisher with this address, or with this verified domain.');
+        process.exitCode = 1;
+        break;
+      }
+      setPlan(ctx, publisher.id, plan as Plan, end);
+      console.log(`publisher ${publisher.id}: ${plan}${plan !== 'free' ? (end ? ` until ${until}` : ', no end date') : ''}`);
+      break;
+    }
+    case 'publishers': {
+      const now = ctx.now();
+      for (const p of listPublishers(ctx)) {
+        const until = p.plan_until ? new Date(p.plan_until).toISOString().slice(0, 10) : '';
+        const state = p.plan === 'free' ? 'free' : p.plan_until !== null && p.plan_until <= now ? `${p.plan} ended ${until}` : `${p.plan}${until ? ` until ${until}` : ''}`;
+        console.log(`${p.id}\t${state}\t${p.email}\t${p.domains || '(no verified domain)'}`);
+      }
+      break;
     }
     case 'stats':
       console.log(statsText(ctx, Number(process.argv[3] ?? 14)));

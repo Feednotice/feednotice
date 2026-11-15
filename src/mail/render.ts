@@ -226,14 +226,23 @@ export function renderFeedRemovedMail(config: Config, locale: Locale, feed: Feed
   };
 }
 
-export function renderConfirmationMail(config: Config, locale: Locale, feed: FeedRow, to: string, confirmUrl: string, cadence: Cadence): OutgoingMail {
+/** A publisher's own words in the confirmation email (paid plans), set apart and attributed. */
+export interface ConfirmWelcome {
+  name: string;
+  text: string;
+}
+
+export function renderConfirmationMail(
+  config: Config, locale: Locale, feed: FeedRow, to: string, confirmUrl: string, cadence: Cadence, welcome: ConfirmWelcome | null = null,
+): OutgoingMail {
   const msg = messages(locale);
+  const quoted = welcome ? `\n\n${msg.mail.welcomeFrom(welcome.name)}\n\n${welcome.text.trim().split('\n').map((l) => `  ${l}`.trimEnd()).join('\n')}` : '';
   return {
     to,
     fromName: config.serviceName,
     subject: msg.mail.confirmSubject(hostOf(feed.url)),
     text: msg.mail.confirmBody({
-      feed: feed.title, url: feed.url, cadence: msg.cadence[cadence], link: confirmUrl, days: config.pendingTtlDays,
+      feed: feed.title, url: feed.url, welcome: quoted, cadence: msg.cadence[cadence], link: confirmUrl, days: config.pendingTtlDays,
       service: config.serviceName, baseUrl: config.baseUrl, contact: config.contactEmail,
     }),
     headers: { 'Auto-Submitted': 'auto-generated' },

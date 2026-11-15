@@ -187,6 +187,28 @@ const MIGRATIONS: string[] = [
     created_at INTEGER NOT NULL
   ) WITHOUT ROWID;
   `,
+  // 6: publisher plans with an end date, logos, and weekly confirmations and departures per feed.
+  `
+  ALTER TABLE publishers ADD COLUMN plan_until INTEGER;
+  ALTER TABLE publishers ADD COLUMN logo_url TEXT NOT NULL DEFAULT '';
+
+  CREATE TABLE publisher_logos (
+    publisher_id INTEGER PRIMARY KEY REFERENCES publishers(id) ON DELETE CASCADE,
+    type         TEXT NOT NULL,
+    body         BLOB NOT NULL,
+    hash         TEXT NOT NULL,
+    fetched_at   INTEGER NOT NULL
+  );
+
+  -- Counts only: never who. week = the Monday that starts it, as YYYY-MM-DD.
+  CREATE TABLE feed_weeks (
+    feed_id   INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
+    week      TEXT NOT NULL,
+    confirmed INTEGER NOT NULL DEFAULT 0,
+    stopped   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (feed_id, week)
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = 1 + MIGRATIONS.length;

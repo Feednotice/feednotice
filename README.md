@@ -40,7 +40,8 @@ HTTPS proxy, all in Docker.
   resumes by itself, or the subscriptions end after 30 days.
 - **Publisher space**: a publisher proves a domain and gets their name and welcome text on
   their feeds' subscribe pages, and subscriber counts (never below 5). `/publishers` prepares a
-  link or a button to paste, with no script.
+  link or a button to paste, with no script. A paid plan, set by the operator, adds a logo, the
+  welcome text in the confirmation email, and confirmations and departures week by week.
 - **For the operator**: a setup checker (`doctor`), daily counters (`stats`), a daily report
   and alerts by email.
 
@@ -92,6 +93,7 @@ in the email dropped into `data/outbox/`. Add `&lang=fr` for French.
 | `node src/cli.ts bounce < message` | reads one bounce from standard input (manual use) |
 | `node src/cli.ts doctor` | checks settings, DNS (A, PTR, MX, SPF, DKIM, DMARC), port 25, HTTPS, Spamhaus |
 | `node src/cli.ts block feed\|domain\|address <value> [reason]` | stops carrying a feed or a whole domain (subscribers told, subscriptions ended), or never writes to an address again; `unblock …` undoes, `blocks` lists |
+| `node src/cli.ts publisher plan <email\|domain> free\|pro\|business [until YYYY-MM-DD]` | gives a publisher a paid plan (logo, welcome in the confirmation email, week by week), with an optional end date; `publishers` lists who has what |
 | `node src/cli.ts stats [days]` | counters per day (default 14): sent, bounces, complaints, subscriptions; current state |
 
 In Docker: `docker compose exec app node src/cli.ts <command>`.
