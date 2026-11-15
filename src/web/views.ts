@@ -164,7 +164,7 @@ textarea { width: 100%; min-height: 6rem; font: inherit; padding: .5rem; border:
 .faq dd { margin: .2rem 0 0; }
 .page img { max-width: 100%; height: auto; }
 .page table { margin: 1rem 0; }
-.page .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+.page .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem; margin: 1.5rem 0; }
 .page .plan { border: 1px solid var(--border); border-radius: 6px; padding: .8rem 1rem; }
 .page .plan h2, .page .plan h3 { margin-top: 0; }
 .page .price { font-size: 1.4rem; font-weight: bold; }
