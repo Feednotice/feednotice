@@ -66,12 +66,12 @@ fn1._domainkey.mail.example.org. TXT    "v=DKIM1; k=rsa; p=…"   ; printed by d
 ## 3. Install
 
 ```sh
-git clone --branch v0.2.0 https://github.com/Feednotice/feednotice.git /opt/feednotice
+git clone --branch v0.3.0 https://github.com/Feednotice/feednotice.git /opt/feednotice
 cd /opt/feednotice
 cp .env.example .env && chmod 600 .env
 openssl rand -base64 32 | tr '+/' '-_' | tr -d '='    # run twice: SECRET, WEBHOOK_SECRET
 nano .env                                              # name, secrets, domains, legal notice
-echo FEEDNOTICE_VERSION=0.2.0 >> .env                  # the images of this release
+echo FEEDNOTICE_VERSION=0.3.0 >> .env                  # the images of this release
 docker compose pull
 docker compose run --rm app node src/cli.ts dkim-keygen
 ```
@@ -252,8 +252,8 @@ Read the release's notes ([CHANGELOG.md](../CHANGELOG.md)) for anything marked *
 
 ```sh
 cd /opt/feednotice
-git fetch --tags && git checkout v0.3.0                 # the new version
-sed -i 's/^FEEDNOTICE_VERSION=.*/FEEDNOTICE_VERSION=0.3.0/' .env
+git fetch --tags && git checkout v0.4.0                 # the new version
+sed -i 's/^FEEDNOTICE_VERSION=.*/FEEDNOTICE_VERSION=0.4.0/' .env
 docker compose pull && docker compose up -d
 ```
 
