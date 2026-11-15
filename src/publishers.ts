@@ -2,10 +2,14 @@
 // gets their name and welcome text on the subscribe page of that domain's feeds, and sees
 // how many people follow them — never who.
 //
+// A paid plan (set by the operator: `cli.ts publisher plan`) adds extras: a logo on the
+// subscribe page, the welcome text in the confirmation email, and confirmations and departures
+// week by week. When the plan ends the extras stop; subscribers are never affected.
+//
 // Sign-in is by magic link, like subscribers. The account (whose email is personal data)
 // is created only when the link is opened.
 
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import dns from 'node:dns';
 import type { Ctx } from './context.ts';
 import { transaction } from './db.ts';
@@ -22,12 +26,18 @@ export interface PublisherRow {
   email: string;
   name: string;
   welcome_text: string;
-  plan: 'free' | 'pro' | 'business';
+  plan: Plan;
+  /** End of the plan (ms); null: no end. */
+  plan_until: number | null;
+  logo_url: string;
   locale: Locale;
   created_at: number;
   terms_version: number | null;
   terms_accepted_at: number | null;
 }
+
+export type Plan = 'free' | 'pro' | 'business';
+export const PLANS: readonly Plan[] = ['free', 'pro', 'business'];
 
 export interface DomainRow {
   id: number;
@@ -51,6 +61,13 @@ export const WELCOME_MAX = 500;
 /** Counts below this are shown as "fewer than 5": nobody can work out who subscribed. */
 export const COUNT_FLOOR = 5;
 const RECHECK_EVERY = 30 * DAY;
+/** Logos: small raster images only (an SVG can carry scripts). */
+export const LOGO_MAX_BYTES = 100 * 1024;
+const LOGO_TYPES: [string, (b: Buffer) => boolean][] = [
+  ['image/png', (b) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))],
+  ['image/jpeg', (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff],
+  ['image/webp', (b) => b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP'],
+];
 const FAILURES_BEFORE_LOSS = 3;
 
 /** What the publisher publishes, as a file or a DNS TXT record. */
@@ -244,4 +261,139 @@ export function purgePublishers(ctx: Ctx): number {
   const res = ctx.db.prepare(`DELETE FROM publishers WHERE created_at < ?
     AND NOT EXISTS (SELECT 1 FROM publisher_domains d WHERE d.publisher_id = publishers.id AND d.verified_at IS NOT NULL)`).run(ctx.now() - 30 * DAY);
   return Number(res.changes);
+}
+
+/** The plan in force: a paid plan past its end date counts as free. */
+export function effectivePlan(p: Pick<PublisherRow, 'plan' | 'plan_until'>, now: number): Plan {
+  return p.plan !== 'free' && (p.plan_until === null || p.plan_until > now) ? p.plan : 'free';
+}
+
+export function hasExtras(p: Pick<PublisherRow, 'plan' | 'plan_until'>, now: number): boolean {
+  return effectivePlan(p, now) !== 'free';
+}
+
+/** A publisher by contact address, or by one of their verified domains. */
+export function findPublisher(ctx: Ctx, who: string): PublisherRow | null {
+  const email = normalizeEmail(who);
+  const byEmail = email ? (ctx.db.prepare('SELECT * FROM publishers WHERE email = ?').get(email) as unknown as PublisherRow | undefined) : undefined;
+  if (byEmail) return byEmail;
+  const domain = normalizeDomain(who);
+  if (!domain) return null;
+  return (ctx.db.prepare(`SELECT p.* FROM publishers p JOIN publisher_domains d ON d.publisher_id = p.id
+    WHERE d.domain = ? AND d.verified_at IS NOT NULL`).get(domain) as unknown as PublisherRow | undefined) ?? null;
+}
+
+/** Sets the plan, until the given time (null: no end). */
+export function setPlan(ctx: Ctx, publisherId: number, plan: Plan, until: number | null): void {
+  ctx.db.prepare('UPDATE publishers SET plan = ?, plan_until = ? WHERE id = ?').run(plan, plan === 'free' ? null : until, publisherId);
+}
+
+export interface PublisherSummary {
+  id: number;
+  email: string;
+  plan: Plan;
+  plan_until: number | null;
+  domains: string;
+}
+
+/** For the operator: every publisher with a verified domain or a paid plan. */
+export function listPublishers(ctx: Ctx): PublisherSummary[] {
+  return ctx.db.prepare(`SELECT p.id, p.email, p.plan, p.plan_until,
+      COALESCE((SELECT GROUP_CONCAT(d.domain, ' ') FROM publisher_domains d WHERE d.publisher_id = p.id AND d.verified_at IS NOT NULL), '') AS domains
+    FROM publishers p
+    WHERE p.plan <> 'free' OR EXISTS (SELECT 1 FROM publisher_domains d WHERE d.publisher_id = p.id AND d.verified_at IS NOT NULL)
+    ORDER BY p.id`).all() as unknown as PublisherSummary[];
+}
+
+/**
+ * The verified publisher of a feed, only if the feed was really served by their site: a
+ * redirect (an open redirect on their domain, say) must not lend their name to someone else's feed.
+ */
+export function publisherForLoadedFeed(ctx: Ctx, loaded: { url: string; fetched: { finalUrl: string } }): (PublisherRow & { domain: string }) | null {
+  try {
+    if (new URL(loaded.url).host !== new URL(loaded.fetched.finalUrl).host) return null;
+  } catch {
+    return null;
+  }
+  return publisherForFeedUrl(ctx, loaded.url);
+}
+
+function onVerifiedDomain(ctx: Ctx, publisherId: number, url: string): boolean {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return listDomains(ctx, publisherId).some((d) => d.verified_at && (host === d.domain || host.endsWith(`.${d.domain}`)));
+}
+
+export interface LogoDeps {
+  fetchBytes(url: string): Promise<Buffer | null>;
+}
+
+export function defaultLogoDeps(ctx: Ctx): LogoDeps {
+  return {
+    async fetchBytes(url) {
+      // No redirect: the image must be served by the publisher's own domain.
+      const res = await fetchFeed(url, { userAgent: ctx.config.userAgent, maxBytes: LOGO_MAX_BYTES, timeoutMs: 10_000, maxRedirects: 0, allowPrivate: ctx.config.allowPrivateFeeds });
+      return res.kind === 'ok' ? (res.bytes ?? null) : null;
+    },
+  };
+}
+
+/**
+ * Takes the logo from an address on one of the publisher's verified domains, checks it is a
+ * PNG, JPEG or WebP image, and keeps a copy: readers' browsers load it from this service, never
+ * from the publisher's site. An empty address removes the logo.
+ */
+export async function setLogo(ctx: Ctx, publisherId: number, input: string, deps: LogoDeps): Promise<'logo-saved' | 'logo-removed' | 'logo-domain' | 'logo-invalid'> {
+  const url = input.trim();
+  if (!url) {
+    transaction(ctx.db, () => {
+      ctx.db.prepare("UPDATE publishers SET logo_url = '' WHERE id = ?").run(publisherId);
+      ctx.db.prepare('DELETE FROM publisher_logos WHERE publisher_id = ?').run(publisherId);
+    });
+    return 'logo-removed';
+  }
+  if (!/^https?:\/\//i.test(url) || url.length > 500) return 'logo-invalid';
+  if (!onVerifiedDomain(ctx, publisherId, url)) return 'logo-domain';
+  const body = await deps.fetchBytes(url);
+  const type = body && body.length <= LOGO_MAX_BYTES ? LOGO_TYPES.find(([, is]) => is(body))?.[0] : undefined;
+  if (!body || !type) return 'logo-invalid';
+  const hash = createHash('sha256').update(body).digest('hex').slice(0, 16);
+  transaction(ctx.db, () => {
+    ctx.db.prepare('UPDATE publishers SET logo_url = ? WHERE id = ?').run(url, publisherId);
+    ctx.db.prepare(`INSERT INTO publisher_logos (publisher_id, type, body, hash, fetched_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (publisher_id) DO UPDATE SET type = excluded.type, body = excluded.body, hash = excluded.hash, fetched_at = excluded.fetched_at`)
+      .run(publisherId, type, body, hash, ctx.now());
+  });
+  return 'logo-saved';
+}
+
+/** Path of the publisher's logo on this service, if they have one, their plan includes it, and its domain is still theirs. */
+export function logoPath(ctx: Ctx, publisher: Pick<PublisherRow, 'id' | 'plan' | 'plan_until' | 'logo_url'>): string | null {
+  if (!publisher.logo_url || !hasExtras(publisher, ctx.now()) || !onVerifiedDomain(ctx, publisher.id, publisher.logo_url)) return null;
+  const row = ctx.db.prepare('SELECT hash FROM publisher_logos WHERE publisher_id = ?').get(publisher.id) as { hash: string } | undefined;
+  return row ? `/logo/${publisher.id}-${row.hash}` : null;
+}
+
+/** The logo's bytes for /logo/<id>-<hash>; the hash makes the address change with the image. */
+export function logoImage(ctx: Ctx, publisherId: number, hash: string): { type: string; body: Buffer } | null {
+  const row = ctx.db.prepare('SELECT type, body FROM publisher_logos WHERE publisher_id = ? AND hash = ?').get(publisherId, hash) as { type: string; body: Uint8Array } | undefined;
+  return row ? { type: row.type, body: Buffer.from(row.body) } : null;
+}
+
+export interface WeekRow {
+  week: string;
+  confirmed: number;
+  stopped: number;
+}
+
+/** Confirmations and departures per week for each feed, the latest `weeks` weeks, newest first. */
+export function publisherGrowth(ctx: Ctx, stats: FeedStats[], weeks = 12): Map<number, WeekRow[]> {
+  const out = new Map<number, WeekRow[]>();
+  const q = ctx.db.prepare('SELECT week, confirmed, stopped FROM feed_weeks WHERE feed_id = ? ORDER BY week DESC LIMIT ?');
+  for (const s of stats) out.set(s.feedId, q.all(s.feedId, weeks) as unknown as WeekRow[]);
+  return out;
 }

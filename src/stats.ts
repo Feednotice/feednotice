@@ -35,6 +35,26 @@ export function count(ctx: Ctx, key: StatKey, n = 1): void {
     ON CONFLICT (day, key) DO UPDATE SET n = n + excluded.n`).run(dayOf(ctx.now(), ctx.config.timeZone), key, n);
 }
 
+/** The Monday that starts the week of `ms`, in the service's time zone, as YYYY-MM-DD. */
+export function weekOf(ms: number, timeZone: string): string {
+  const day = dayOf(ms, timeZone);
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Per feed and week: subscriptions confirmed, and active ones that ended. Counts only, kept
+ * about a year (purge.ts); publishers on a paid plan see them, never below COUNT_FLOOR.
+ */
+export function countFeedWeek(ctx: Ctx, kind: 'confirmed' | 'stopped', feedIds: number[]): void {
+  if (feedIds.length === 0) return;
+  const week = weekOf(ctx.now(), ctx.config.timeZone);
+  const q = stmt(ctx.db, `INSERT INTO feed_weeks (feed_id, week, ${kind}) VALUES (?, ?, 1)
+    ON CONFLICT (feed_id, week) DO UPDATE SET ${kind} = ${kind} + 1`);
+  for (const id of feedIds) q.run(id, week);
+}
+
 /** Totals per key over the given days (inclusive). */
 export function totals(db: Db, fromDay: string, toDay: string): Partial<Record<StatKey, number>> {
   const rows = db.prepare('SELECT key, SUM(n) AS n FROM stats_daily WHERE day BETWEEN ? AND ? GROUP BY key').all(fromDay, toDay) as { key: StatKey; n: number }[];
@@ -51,4 +71,5 @@ export function setState(db: Db, key: string, value: string): void {
 
 export function purgeStats(db: Db, now: number, timeZone: string): void {
   db.prepare('DELETE FROM stats_daily WHERE day < ?').run(dayOf(now - 400 * 86_400_000, timeZone));
+  db.prepare('DELETE FROM feed_weeks WHERE week < ?').run(dayOf(now - 400 * 86_400_000, timeZone));
 }

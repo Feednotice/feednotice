@@ -78,3 +78,27 @@ Once verified (and checked again every 30 days):
 Opening a space means accepting the service's terms of use (`/terms`), which include a part for
 publishers. The split per cadence is hidden when a column would hold a small number. Nothing in
 the publisher space is needed for the link to work.
+
+### Paid plans
+
+The operator can give a publisher a paid plan (`pro` or `business`), with or without an end
+date. There is no price in this code: the operator decides what it costs and how it is paid.
+A paid plan adds:
+
+- **a logo** on the subscribe page: the publisher gives the address of a PNG, JPEG or WebP image
+  (100 KB at most) on one of their verified domains. The service copies it once and serves it
+  itself, so readers' browsers load nothing from the publisher's site. SVG is refused, since it
+  can carry scripts. The logo disappears if the domain proof is lost;
+- **the welcome text in the confirmation email**, set apart under "A word from <name>:";
+- **week by week**: subscriptions confirmed and readers who left (unsubscribed, or erased their
+  address), per feed and per week, for feeds followed by at least 5 people. Weeks start on Monday
+  in the service's time zone; counts are kept about a year.
+
+When the plan ends, these extras stop at once. The name, welcome text on the page, counts and
+every subscription stay: readers are never affected by a publisher's plan.
+
+```sh
+node src/cli.ts publisher plan editor@example.org pro 2027-12-31   # or a verified domain
+node src/cli.ts publisher plan example.org free
+node src/cli.ts publishers                                          # who has what
+```

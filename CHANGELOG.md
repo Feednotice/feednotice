@@ -4,6 +4,16 @@ Versions follow [semantic versioning](https://semver.org): a database schema cha
 setting that must be changed is called out under **Upgrading**. Images:
 `ghcr.io/feednotice/feednotice`, `-mta`, `-backup`, tagged with the version.
 
+## Unreleased
+
+**Upgrading**: the database schema goes from 5 to 6 at start-up (publisher plans, logos and
+weekly counts).
+
+- **Paid publisher plans**, set by the operator (`publisher plan`, `publishers`), with an end
+  date: a logo on the subscribe page, the welcome text in the confirmation email, and
+  confirmations and departures week by week. No price in the code; readers never affected
+  ([docs/for-publishers.md](docs/for-publishers.md#paid-plans)).
+
 ## 0.3.0 (2026-11-15)
 
 **Upgrading**: the database schema goes from 4 to 5 at start-up (a table of blocks). New

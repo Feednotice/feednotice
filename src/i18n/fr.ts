@@ -224,6 +224,10 @@ export const fr: Messages = {
     failed: "La preuve n'a pas encore été trouvée. Une modification DNS peut mettre un moment à apparaître.",
     invalid: "Cela ne ressemble pas à un nom de domaine.",
     limit: 'Vous avez atteint le nombre maximal de domaines.',
+    'logo-saved': 'Le logo est enregistré.',
+    'logo-removed': 'Le logo est retiré.',
+    'logo-domain': "Le logo doit se trouver sur l'un de vos domaines vérifiés.",
+    'logo-invalid': "Cette adresse ne donne pas une image PNG, JPEG ou WebP de 100 Ko au plus.",
     saved: 'Enregistré.',
   },
   publisherFeedsHeading: 'Vos flux',
@@ -238,6 +242,19 @@ export const fr: Messages = {
   publisherDeletedTitle: 'Espace éditeur supprimé',
   publisherDeletedText: 'Votre adresse, votre profil et vos domaines sont effacés. Vos lecteurs gardent leurs abonnements.',
   publisherExpiredText: "Ce lien n'est plus valable. Demandez-en un nouveau depuis la page Éditeurs.",
+  publisherPlanUntil: (date) => `jusqu'au ${date}`,
+  publisherProHint: (plan) => `Avec l'offre ${plan} : votre logo sur la page d'abonnement, votre mot d'accueil dans le courriel de confirmation, et les confirmations et départs semaine par semaine.`,
+  publisherLogoHeading: 'Logo',
+  publisherLogoLabel: 'Adresse de votre logo',
+  publisherLogoHint: (kb) => `Une image PNG, JPEG ou WebP de ${kb} Ko au plus, sur l'un de vos domaines vérifiés. Elle est copiée ici : les navigateurs des lecteurs ne la chargent jamais depuis votre site. Videz le champ pour la retirer.`,
+  publisherLogoSave: 'Enregistrer le logo',
+  publisherGrowthHeading: 'Semaine par semaine',
+  publisherGrowthIntro: (n) => `Abonnements confirmés et lecteurs partis, par semaine, pour chaque flux suivi par au moins ${n} personnes.`,
+  publisherGrowthNone: (n) => `Rien à montrer pour l'instant : un flux apparaît ici dès qu'au moins ${n} personnes le suivent.`,
+  publisherColWeek: 'Semaine du',
+  publisherColConfirmed: 'Confirmés',
+  publisherColStopped: 'Partis',
+  logoAlt: (name) => `Logo de ${name}`,
   publishedBy: (name) => `Publié par ${name}`,
   verifiedDomain: (domain) => `domaine vérifié ${domain}`,
 
@@ -426,13 +443,14 @@ ${p.service}`,
     mergedUnsubscribeFeed: 'Se désabonner de ce flux',
     mergedWhy: (feeds, kind) => `Vous recevez ce récapitulatif ${kind === 'daily' ? 'quotidien' : 'hebdomadaire'} parce que cette adresse est abonnée à ces ${feeds} flux.`,
     mergedStop: (kind) => `Arrêter ce récapitulatif ${kind === 'daily' ? 'quotidien' : 'hebdomadaire'}`,
+    welcomeFrom: (name) => `Un mot de ${name} :`,
     confirmSubject: (host) => `Confirmez votre abonnement aux nouveautés de ${host}`,
     confirmBody: (p) => `Bonjour,
 
 Quelqu'un — vous, sans doute — a demandé à recevoir par courriel les nouveautés de :
 
   ${p.feed}
-  ${p.url}
+  ${p.url}${p.welcome}
 
 Rythme choisi : ${p.cadence}.
 

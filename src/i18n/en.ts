@@ -264,6 +264,10 @@ export const en = {
     failed: 'The proof was not found yet. DNS changes can take a while to appear.',
     invalid: "This doesn't look like a domain name.",
     limit: 'You have reached the maximum number of domains.',
+    'logo-saved': 'The logo is saved.',
+    'logo-removed': 'The logo is removed.',
+    'logo-domain': 'The logo must be on one of your verified domains.',
+    'logo-invalid': 'This address does not give a PNG, JPEG or WebP image of 100 KB at most.',
     saved: 'Saved.',
   } as Record<string, string>,
   publisherFeedsHeading: 'Your feeds',
@@ -278,6 +282,19 @@ export const en = {
   publisherDeletedTitle: 'Publisher space deleted',
   publisherDeletedText: 'Your address, profile and domains are erased. Your readers keep their subscriptions.',
   publisherExpiredText: 'This link is no longer valid. Ask for a new one from the Publishers page.',
+  publisherPlanUntil: (date: string) => `until ${date}`,
+  publisherProHint: (plan: string) => `With the ${plan} plan: your logo on the subscribe page, your welcome text in the confirmation email, and confirmations and departures week by week.`,
+  publisherLogoHeading: 'Logo',
+  publisherLogoLabel: 'Address of your logo',
+  publisherLogoHint: (kb: number) => `A PNG, JPEG or WebP image of ${kb} KB at most, on one of your verified domains. It is copied here: readers' browsers never load it from your site. Leave the field empty to remove it.`,
+  publisherLogoSave: 'Save the logo',
+  publisherGrowthHeading: 'Week by week',
+  publisherGrowthIntro: (n: number) => `Subscriptions confirmed and readers who left, per week, for each feed followed by at least ${n} people.`,
+  publisherGrowthNone: (n: number) => `Nothing to show yet: a feed appears here once at least ${n} people follow it.`,
+  publisherColWeek: 'Week of',
+  publisherColConfirmed: 'Confirmed',
+  publisherColStopped: 'Left',
+  logoAlt: (name: string) => `Logo of ${name}`,
   publishedBy: (name: string) => `Published by ${name}`,
   verifiedDomain: (domain: string) => `verified domain ${domain}`,
 
@@ -469,13 +486,14 @@ ${p.service}`,
       `It is still checked once a day. If it comes back, your updates resume by themselves. Otherwise, this subscription ends on ${p.until}, and if it is your last one, your address is erased. There is nothing to do.`,
       `If the website now publishes its feed at another address, subscribe to the new one from the website.`,
     ],
+    welcomeFrom: (name: string) => `A word from ${name}:`,
     confirmSubject: (host: string) => `Confirm your subscription to updates from ${host}`,
-    confirmBody: (p: { feed: string; url: string; cadence: string; link: string; days: number; service: string; baseUrl: string; contact: string }) => `Hello,
+    confirmBody: (p: { feed: string; url: string; welcome: string; cadence: string; link: string; days: number; service: string; baseUrl: string; contact: string }) => `Hello,
 
 Someone (you, probably) asked to receive by email the updates of:
 
   ${p.feed}
-  ${p.url}
+  ${p.url}${p.welcome}
 
 How often: ${p.cadence}.
 

@@ -32,6 +32,8 @@ export type FetchResult =
     kind: 'ok'; body: string; finalUrl: string; etag: string | null; lastModified: string | null; maxAgeSeconds: number | null; contentType: string;
     /** Reached through redirects that were all permanent (301, 308): the feed has moved. */
     movedPermanently?: boolean;
+    /** The body as received (after decompression), for content that is not text. */
+    bytes?: Buffer;
   }
   | { kind: 'not-modified'; maxAgeSeconds: number | null }
   | { kind: 'error'; code: FetchErrorCode; message: string; httpStatus?: number; retryAfterSeconds?: number | null; permanent?: boolean };
@@ -173,7 +175,7 @@ function requestOnce(url: string, opts: FetchOptions, conditional: boolean): Pro
         if (size > maxBytes) {
           req.destroy();
           stream.destroy();
-          resolve(fail('too-large', `Feed larger than ${Math.round(maxBytes / 1024 / 1024)} MB.`));
+          resolve(fail('too-large', `Larger than ${maxBytes >= 1024 * 1024 ? `${Math.round(maxBytes / 1024 / 1024)} MB` : `${Math.round(maxBytes / 1024)} KB`}.`));
           return;
         }
         chunks.push(c);
@@ -185,6 +187,7 @@ function requestOnce(url: string, opts: FetchOptions, conditional: boolean): Pro
         resolve({
           kind: 'ok',
           body: decodeBody(buf, contentType),
+          bytes: buf,
           finalUrl: u.toString(),
           etag: typeof res.headers.etag === 'string' ? res.headers.etag : null,
           lastModified: typeof res.headers['last-modified'] === 'string' ? res.headers['last-modified'] : null,

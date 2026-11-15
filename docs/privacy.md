@@ -48,8 +48,8 @@ documentation, not legal advice.
 | Purpose | Letting a publisher prove they control a domain, customize the subscribe page of its feeds, and see subscriber numbers |
 | Legal basis | Performance of a contract: the terms of use, served at `/terms`, accepted on the sign-in form [review them for your deployment] |
 | Data subjects | People who open a publisher space |
-| Data | Contact email address; the name and welcome text they write; their domains, verification tokens and dates; language; plan; the version of the terms accepted, and when |
-| Not shown to them | Any subscriber address; any count below 5, nor a split per cadence that would reveal one |
+| Data | Contact email address; the name and welcome text they write; their domains, verification tokens and dates; language; plan and its end date; with a paid plan, their logo's address and a copy of the image; the version of the terms accepted, and when |
+| Not shown to them | Any subscriber address; any count below 5, nor a split per cadence that would reveal one; weekly confirmations and departures only for feeds followed by 5 or more (`feed_weeks` holds counts per feed and week, no personal data, kept about a year) |
 | Recipients | The operator and its processor [hosting provider] |
 | Retention | Until the publisher deletes the space (button in the space); accounts that never verify a domain are erased 30 days after creation (`src/publishers.ts`). The sign-in link request stores nothing: the account is created only when the link is opened |
 

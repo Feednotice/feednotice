@@ -10,12 +10,12 @@ import { CADENCES } from '../model.ts';
 import type { DiscoveredFeed } from '../feed/discover.ts';
 import type { Section } from '../i18n/en.ts';
 import {
-  COUNT_FLOOR, NAME_MAX, TERMS_DATE, verificationDnsName, verificationFileUrl, verificationRecord, WELCOME_MAX,
-  type DomainRow, type FeedStats, type PublisherRow,
+  COUNT_FLOOR, LOGO_MAX_BYTES, NAME_MAX, TERMS_DATE, verificationDnsName, verificationFileUrl, verificationRecord, WELCOME_MAX,
+  type DomainRow, type FeedStats, type Plan, type PublisherRow, type WeekRow,
 } from '../publishers.ts';
 import type { SubscriptionListItem } from '../subscriptions.ts';
 import type { Brand } from './brand.ts';
-import { navPages, newsItems, type SitePage } from './pages.ts';
+import { navPages, newsItems, pageIn, type SitePage } from './pages.ts';
 
 /** What every page needs: configuration, language, and the address to switch language on. */
 export interface Page {
@@ -154,6 +154,8 @@ td form { margin: 0; display: inline; }
 select { font: inherit; }
 textarea { width: 100%; min-height: 6rem; font: inherit; padding: .5rem; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: inherit; }
 .publisher { border-left: 3px solid var(--accent); padding: .3rem 0 .3rem .8rem; }
+.publisher-logo { display: block; max-height: 64px; max-width: 240px; width: auto; height: auto; margin: .3rem 0; }
+details.growth { margin: .5rem 0; }
 .notice { border-left: 4px solid var(--accent); padding: .5rem 1rem; }
 .check { margin-top: .8rem; }
 .lead { font-size: 1.1rem; }
@@ -211,6 +213,8 @@ export interface PublisherBranding {
   name: string;
   welcome_text: string;
   domain: string;
+  /** Path of the logo on this service (paid plans), if any. */
+  logo?: string | null;
 }
 
 export function subscribePage(
@@ -223,7 +227,7 @@ export function subscribePage(
   const pub = opts.publisher;
   return layout(p, m.subscribeTitle(feed.title), `
 <h1>${esc(feed.title)}</h1>
-${pub ? `<div class="publisher"><p><strong>${esc(m.publishedBy(pub.name || pub.domain))}</strong> <span class="muted">(${esc(m.verifiedDomain(pub.domain))})</span></p>
+${pub ? `<div class="publisher">${pub.logo ? `<img class="publisher-logo" src="${esc(pub.logo)}" alt="${esc(m.logoAlt(pub.name || pub.domain))}">` : ''}<p><strong>${esc(m.publishedBy(pub.name || pub.domain))}</strong> <span class="muted">(${esc(m.verifiedDomain(pub.domain))})</span></p>
 ${pub.welcome_text ? pub.welcome_text.split(/\n{2,}/).map((t) => `<p>${esc(t).replace(/\n/g, '<br>')}</p>`).join('\n') : ''}</div>` : ''}
 ${feed.description ? `<p>${esc(truncate(feed.description, 400))}</p>` : ''}
 <p class="muted">${esc(m.label(m.feedLabel))} <a href="${esc(feedUrl)}">${esc(feedUrl)}</a>${feed.siteUrl ? ` · ${esc(m.label(m.siteLabel))} <a href="${esc(feed.siteUrl)}">${esc(hostOf(feed.siteUrl))}</a>` : ''}</p>
@@ -470,8 +474,17 @@ export function publisherSentPage(p: Page): string {
   return layout(p, p.m.publisherTitle, `<h1>${esc(p.m.checkMailboxHeading)}</h1>\n<p>${esc(p.m.publisherSentText)}</p>`);
 }
 
+export interface PublisherExtras {
+  /** The plan in force (a paid plan past its end counts as free). */
+  plan: Plan;
+  logo: string | null;
+  /** Weekly confirmations and departures per feed; null without a paid plan. */
+  growth: Map<number, WeekRow[]> | null;
+}
+
 export function publisherPage(
   p: Page, action: string, publisher: PublisherRow, domains: DomainRow[], stats: FeedStats[], result: string | null,
+  extras: PublisherExtras = { plan: 'free', logo: null, growth: null },
 ): string {
   const { m, config, locale } = p;
   const hidden = (name: string, value: string | number) => `<input type="hidden" name="${name}" value="${esc(String(value))}">`;
@@ -482,11 +495,14 @@ export function publisherPage(
     const cells = [s.immediate, s.daily, s.weekly];
     return cells.every((n) => n === 0 || n >= COUNT_FLOOR) ? cells.map(String) : cells.map(() => '—');
   };
+  // The operator's pricing page, if they wrote one (docs/pages.md).
+  const pricing = p.brand.pages?.byPath.get('/pricing');
   const notice = result && Object.hasOwn(m.publisherResult, result) ? `<p class="notice" role="status">${esc(m.publisherResult[result])}</p>` : '';
   return layout(p, m.publisherTitle, `
 <h1>${esc(m.publisherTitle)}</h1>
-<p class="muted">${esc(m.publisherSignedIn(publisher.email, m.planNames[publisher.plan]))}</p>
+<p class="muted">${esc(m.publisherSignedIn(publisher.email, m.planNames[extras.plan]))}${extras.plan !== 'free' && publisher.plan_until ? ` ${esc(m.publisherPlanUntil(formatDate(locale, config.timeZone, publisher.plan_until)))}` : ''}</p>
 ${notice}
+${extras.plan === 'free' ? `<p class="note">${esc(m.publisherProHint(m.planNames.pro))}${pricing ? ` <a href="${esc(withLang('/pricing', locale))}">${esc(pageIn(pricing, locale, config.defaultLocale).title)}</a>` : ''}</p>` : ''}
 
 <h2>${esc(m.publisherProfileHeading)}</h2>
 <form action="${esc(action)}" method="post">
@@ -498,6 +514,16 @@ ${hidden('action', 'profile')}${langInput(p)}
 <p class="muted">${esc(m.publisherProfileHint)}</p>
 <button type="submit">${esc(m.publisherSave)}</button>
 </form>
+${extras.plan === 'free' ? '' : `
+<h2>${esc(m.publisherLogoHeading)}</h2>
+<form action="${esc(action)}" method="post">
+${hidden('action', 'logo')}${langInput(p)}
+${extras.logo ? `<img class="publisher-logo" src="${esc(extras.logo)}" alt="${esc(m.logoAlt(publisher.name || publisher.email))}">` : ''}
+<label for="logo">${esc(m.publisherLogoLabel)}</label>
+<input id="logo" name="logo" type="url" maxlength="500" value="${esc(publisher.logo_url)}" placeholder="https://">
+<p class="muted">${esc(m.publisherLogoHint(Math.round(LOGO_MAX_BYTES / 1024)))}</p>
+<button type="submit">${esc(m.publisherLogoSave)}</button>
+</form>`}
 
 <h2>${esc(m.publisherDomainsHeading)}</h2>
 ${domains.length === 0 ? `<p>${esc(m.publisherNoDomain)}</p>` : domains.map((d) => `<div class="publisher">
@@ -524,6 +550,7 @@ ${stats.length === 0 ? `<p>${esc(m.publisherNoFeeds)}</p>` : `<table>
 ${stats.map((s) => `<tr><td><a href="${esc(s.url)}">${esc(s.title || s.url)}</a><br><a class="muted" href="${esc(withLang(`/publishers?feed=${encodeURIComponent(s.url)}`, locale))}#button">${esc(m.publishersButtonCode)}</a></td>${breakdown(s).map((c) => `<td>${esc(c)}</td>`).join('')}<td><strong>${esc(count(s.total))}</strong></td></tr>`).join('\n')}
 </tbody></table>`}
 <p class="muted">${esc(m.publisherCountsNote(COUNT_FLOOR))}</p>
+${extras.growth ? growthSection(p, stats, extras.growth) : ''}
 
 <h2>${esc(m.publisherDeleteHeading)}</h2>
 <form action="${esc(action)}" method="post">
@@ -531,6 +558,21 @@ ${hidden('action', 'delete')}${langInput(p)}
 <p>${esc(m.publisherDeleteText)}</p>
 <button type="submit">${esc(m.publisherDeleteButton)}</button>
 </form>`);
+}
+
+/** Weekly confirmations and departures, only for feeds above the floor: below it, a single departure could point to someone. */
+function growthSection(p: Page, stats: FeedStats[], growth: Map<number, WeekRow[]>): string {
+  const { m, config, locale } = p;
+  const shown = stats.filter((s) => s.total >= COUNT_FLOOR);
+  return `
+<h2>${esc(m.publisherGrowthHeading)}</h2>
+${shown.length === 0 ? `<p>${esc(m.publisherGrowthNone(COUNT_FLOOR))}</p>` : `<p>${esc(m.publisherGrowthIntro(COUNT_FLOOR))}</p>
+${shown.map((s, i) => `<details class="growth"${i === 0 ? ' open' : ''}><summary>${esc(s.title || s.url)}</summary>
+<table>
+<thead><tr><th>${esc(m.publisherColWeek)}</th><th>${esc(m.publisherColConfirmed)}</th><th>${esc(m.publisherColStopped)}</th></tr></thead>
+<tbody>
+${(growth.get(s.feedId) ?? []).map((w) => `<tr><td>${esc(formatDate(locale, config.timeZone, Date.parse(`${w.week}T12:00:00Z`)))}</td><td>${w.confirmed}</td><td>${w.stopped}</td></tr>`).join('\n')}
+</tbody></table></details>`).join('\n')}`}`;
 }
 
 export function robotPage(p: Page): string {
