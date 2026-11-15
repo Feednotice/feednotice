@@ -1,4 +1,5 @@
-// Languages of the pages and emails. English is the default; each catalog must provide every
+// Languages of the pages and emails. English is the default; German and Spanish await a native
+// speaker's review (docs/translations.md); each catalog must provide every
 // message of the English one (TypeScript checks it).
 //
 // No cookie: the language comes from an explicit ?lang= parameter, else from Accept-Language.
@@ -7,13 +8,18 @@
 
 import { en, type Messages } from './en.ts';
 import { fr } from './fr.ts';
+import { de } from './de.ts';
+import { es } from './es.ts';
 
 export type { Messages };
 
-export const LOCALES = ['en', 'fr'] as const;
+export const LOCALES = ['en', 'fr', 'de', 'es'] as const;
 export type Locale = (typeof LOCALES)[number];
 
-const CATALOGS: Record<Locale, Messages> = { en, fr };
+const CATALOGS: Record<Locale, Messages> = { en, fr, de, es };
+
+/** BCP 47 tag for dates and numbers. */
+export const INTL_TAGS: Record<Locale, string> = { en: 'en-GB', fr: 'fr-FR', de: 'de-DE', es: 'es-ES' };
 
 export function isLocale(v: unknown): v is Locale {
   return typeof v === 'string' && (LOCALES as readonly string[]).includes(v);
@@ -47,7 +53,7 @@ export function formatDate(locale: Locale, timeZone: string, ms: number | Date |
   const key = `${locale}|${timeZone}`;
   let f = dateFormats.get(key);
   if (!f) {
-    f = new Intl.DateTimeFormat(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'long', timeZone });
+    f = new Intl.DateTimeFormat(INTL_TAGS[locale], { dateStyle: 'long', timeZone });
     dateFormats.set(key, f);
   }
   return f.format(ms instanceof Date ? ms : new Date(ms));

@@ -3,7 +3,7 @@
 Email updates for any Atom or RSS feed. A reader follows a plain link next to the feed, sees
 what they are about to follow, enters an address and confirms. From then on they get each new
 entry, or a daily or weekly digest. No account, no password, no JavaScript, no tracking.
-English and French.
+English and French; German and Spanish awaiting review.
 
 FeedNotice is self-hosted: one small server runs the web app, a send-only mail server and an
 HTTPS proxy, all in Docker.
@@ -12,6 +12,7 @@ HTTPS proxy, all in Docker.
 - [Design](docs/design.md): journey, architecture, data model, deduplication, deliverability
 - [Branding](docs/branding.md): your service's name, logo, favicons and colours
 - [Your own pages](docs/pages.md): pricing, help, news (with its own feed), for search engines
+- [Translations](docs/translations.md): adding a language, reviewing German and Spanish
 - [Privacy](docs/privacy.md): what is stored, for how long; a starting point for your GDPR register
 - [For publishers](docs/for-publishers.md): the link to add next to a feed, WebSub, the publisher space
 - [WordPress plugin](integrations/wordpress/README.md): the link or button after posts, in a widget, as a shortcode
@@ -152,7 +153,7 @@ src/
   doctor.ts          setup checker
   blocks.ts          the operator's blocks: feeds, domains, addresses
   backup.ts          nightly local copies, off-site backup status
-  i18n/              en (reference) and fr message catalogs
+  i18n/              en (reference), fr, de and es message catalogs
   mail/              templates, SMTP sending with DKIM, sending caps, bounce parsing
   web/               HTTP server, pages without JavaScript, branding, the operator's pages
   db.ts              SQLite schema and migrations

@@ -4,6 +4,24 @@ Versions follow [semantic versioning](https://semver.org): a database schema cha
 setting that must be changed is called out under **Upgrading**. Images:
 `ghcr.io/feednotice/feednotice`, `-mta`, `-backup`, tagged with the version.
 
+## Unreleased
+
+**Upgrading**: the database schema goes from 4 to 5 at start-up (a table of blocks). New
+optional settings: `PAGES_PATH`, and `SMTP_*` in `.env` to send through a provider's relay.
+
+- **German and Spanish** pages and emails, to be reviewed by native speakers
+  ([docs/translations.md](docs/translations.md)).
+- **Your own pages**: pricing, help, use cases, news with an Atom feed, from a folder of HTML
+  fragments; a sitemap and robots.txt ([docs/pages.md](docs/pages.md)).
+- **Blocks**: `block feed|domain|address` stops carrying a feed or a domain (subscribers are
+  told) or never writes to an address again.
+- **Operator**: the daily report counts subscribe pages shown and warns when few requests are
+  confirmed.
+- **Relay fallback**: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` in `.env` switch sending
+  to a provider's relay, with TLS ([deploy](docs/deploy.md#if-the-sending-ip-gets-blocklisted)).
+- **WordPress plugin**: the email link or button after posts, in a widget, as a shortcode
+  ([integrations/wordpress](integrations/wordpress/README.md)).
+
 ## 0.2.0 (2026-11-05)
 
 **Upgrading**: the database schema goes from 2 to 4 at start-up (indexes and three columns; a

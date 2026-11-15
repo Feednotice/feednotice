@@ -4,7 +4,7 @@
 import type { Config } from '../config.ts';
 import type { ParsedEntry, ParsedFeed } from '../feed/parse.ts';
 import { truncate } from '../feed/text.ts';
-import { formatDate, LOCALES, messages, type Locale, type Messages } from '../i18n/index.ts';
+import { formatDate, INTL_TAGS, LOCALES, messages, type Locale, type Messages } from '../i18n/index.ts';
 import type { Cadence } from '../model.ts';
 import { CADENCES } from '../model.ts';
 import type { DiscoveredFeed } from '../feed/discover.ts';
@@ -566,7 +566,7 @@ export function legalPage(p: Page): string {
   const { m, config, locale } = p;
   const l = config.legal;
   const capital = l.capitalEur
-    ? new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-GB', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(l.capitalEur)
+    ? new Intl.NumberFormat(INTL_TAGS[locale], { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(l.capitalEur)
     : '';
   const sections = m.legalSections({
     service: config.serviceName, company: l.company, capital, address: l.address, registration: l.registration,
