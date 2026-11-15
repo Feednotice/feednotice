@@ -29,6 +29,19 @@ npm start           # http://localhost:8080; emails go to data/outbox/
   an existing one.
 - Run `npm run bench` if your change touches sending, digests or the purge.
 
+## Releasing
+
+Maintainers, in this order:
+
+1. In a pull request: set `version` in `package.json` (`npm version X.Y.Z --no-git-tag-version`,
+   which updates `package-lock.json` too), turn the changelog's *Unreleased* heading into
+   `## X.Y.Z (YYYY-MM-DD)` with an **Upgrading** note if needed, and update the version in
+   `.env.example` and `docs/deploy.md`.
+2. Merge it.
+3. Create the release on GitHub with the tag `vX.Y.Z` on `main`. The release workflow checks
+   that the tag matches `package.json`, runs the tests, builds and pushes the images, and fills
+   in the release notes from the changelog section.
+
 ## Licence
 
 FeedNotice is licensed under the AGPL-3.0-or-later. By contributing, you agree that your

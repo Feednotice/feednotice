@@ -50,7 +50,7 @@ HTTPS proxy, all in Docker.
 ```
              HTTPS                        SMTP :2525 (internal)            SMTP :25
 Reader ─────────────▶ caddy ──▶ app ─────────────────────────▶ mta ─────────────────▶ mailboxes
-                                 ▲  Node.js 24 + SQLite            send-only Postfix        │
+                                 ▲  Node.js 26 + SQLite            send-only Postfix        │
                                  └──────── POST /hooks/bounce ◀──── bounce address ◀────────┘
 ```
 

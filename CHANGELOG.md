@@ -4,7 +4,7 @@ Versions follow [semantic versioning](https://semver.org): a database schema cha
 setting that must be changed is called out under **Upgrading**. Images:
 `ghcr.io/feednotice/feednotice`, `-mta`, `-backup`, tagged with the version.
 
-## Unreleased
+## 0.3.0 (2026-11-15)
 
 **Upgrading**: the database schema goes from 4 to 6 at start-up (blocks; publisher plans, logos
 and weekly counts). New
@@ -26,6 +26,8 @@ optional settings: `PAGES_PATH`, and `SMTP_*` in `.env` to send through a provid
   ([docs/for-publishers.md](docs/for-publishers.md#paid-plans)).
 - **WordPress plugin**: the email link or button after posts, in a widget, as a shortcode
   ([integrations/wordpress](integrations/wordpress/README.md)).
+- **Dependencies**: the `app` image runs Node.js 26, `mta` and `backup` Alpine 3.24;
+  fast-xml-parser and nodemailer updated.
 
 ## 0.2.0 (2026-11-05)
 
