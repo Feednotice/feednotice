@@ -14,6 +14,7 @@ HTTPS proxy, all in Docker.
 - [Your own pages](docs/pages.md): pricing, help, news (with its own feed), for search engines
 - [Privacy](docs/privacy.md): what is stored, for how long; a starting point for your GDPR register
 - [For publishers](docs/for-publishers.md): the link to add next to a feed, WebSub, the publisher space
+- [WordPress plugin](integrations/wordpress/README.md): the link or button after posts, in a widget, as a shortcode
 - [Name and logo](TRADEMARKS.md): run the code under your own name
 - [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 

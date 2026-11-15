@@ -25,6 +25,21 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+  wordpress:
+    name: WordPress plugin
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['7.4', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - run: for f in integrations/wordpress/feednotice-subscribe/*.php; do php -l "$f"; done
+      - run: php integrations/wordpress/tests/run.php
+
   docker:
     name: Docker stack
     runs-on: ubuntu-latest
