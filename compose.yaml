@@ -2,9 +2,10 @@
 #   app    web pages, feed reading, sending (Node.js + SQLite)
 #   mta    send-only Postfix; receives only the bounce address and hands it to the app
 #   caddy  HTTPS reverse proxy
-# Settings come from .env (see .env.example). Two variables, for a deployment that includes
-# this file from another folder (docs/deploy.md): ENV_FILE, the settings file, and BRAND_PATH,
-# your logo, favicons and colours (docs/branding.md). Both paths are relative to this folder.
+# Settings come from .env (see .env.example). For a deployment that includes this file from
+# another folder (docs/deploy.md): ENV_FILE, the settings file; BRAND_PATH, your logo, favicons
+# and colours (docs/branding.md); PAGES_PATH, your own pages (docs/pages.md). Paths are
+# relative to this folder.
 
 name: feednotice
 
@@ -28,14 +29,17 @@ services:
       NODE_ENV: production
       BRAND_DIR: /app/brand
       BACKUP_STATUS_DIR: /app/backup-status
+      PAGES_DIR: /app/pages
       DB_PATH: /app/data/feednotice.sqlite
       MAIL_TRANSPORT: smtp
-      SMTP_HOST: mta
-      SMTP_PORT: "2525"
+      # The mta container; or a provider's relay, as a fallback (docs/deploy.md).
+      SMTP_HOST: ${SMTP_HOST:-mta}
+      SMTP_PORT: ${SMTP_PORT:-2525}
       TRUST_PROXY: "1"
     volumes:
       - app-data:/app/data
       - ${BRAND_PATH:-./docker/no-brand}:/app/brand:ro
+      - ${PAGES_PATH:-./docker/no-pages}:/app/pages:ro
       - backup-status:/app/backup-status:ro
     networks: [internal]
     depends_on: [mta]

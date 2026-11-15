@@ -56,7 +56,7 @@ export function snapshot(ctx: Ctx): Snapshot {
 type Totals = Partial<Record<StatKey, number>>;
 
 export interface Problem {
-  kind: 'bounces' | 'complaints' | 'failures' | 'backup';
+  kind: 'bounces' | 'complaints' | 'failures' | 'backup' | 'confirmations';
   text: string;
 }
 
@@ -78,6 +78,19 @@ export function problems(t: Totals): Problem[] {
   return out;
 }
 
+/**
+ * Over a week (people confirm hours or days after asking): few confirmations for many
+ * requests usually means the confirmation emails land in spam folders.
+ */
+export function funnelProblems(week: Totals): Problem[] {
+  const requested = week['sub.requested'] ?? 0;
+  const confirmed = week['sub.confirmed'] ?? 0;
+  if (requested >= 20 && confirmed / requested < 0.3) {
+    return [{ kind: 'confirmations', text: `only ${Math.round((100 * confirmed) / requested)}% of subscription requests confirmed this week: check that confirmation emails reach inboxes (mail-tester, Postmaster Tools)` }];
+  }
+  return [];
+}
+
 function table(rows: [string, string | number][]): string {
   const width = Math.max(...rows.map(([k]) => k.length));
   return rows.map(([k, v]) => `  ${k.padEnd(width)}  ${v}`).join('\n');
@@ -86,7 +99,7 @@ function table(rows: [string, string | number][]): string {
 export function renderReport(ctx: Ctx, day: string, week: Totals, yesterday: Totals): { subject: string; text: string } {
   const s = snapshot(ctx);
   const n = (t: Totals, k: StatKey) => t[k] ?? 0;
-  const issues = [...problems(yesterday), ...backupProblems(ctx).map((text) => ({ kind: 'backup' as const, text }))];
+  const issues = [...problems(yesterday), ...funnelProblems(week), ...backupProblems(ctx).map((text) => ({ kind: 'backup' as const, text }))];
   const offsite = offsiteStatus(ctx);
   const when = (s: { at: number; ok: boolean; detail: string } | null) =>
     (s ? `${s.ok ? 'ok' : 'FAILED'}, ${new Date(s.at).toISOString().slice(0, 16).replace('T', ' ')} UTC (${s.detail})` : 'never');
@@ -97,6 +110,7 @@ export function renderReport(ctx: Ctx, day: string, week: Totals, yesterday: Tot
     ['rounds held by the cap', n(t, 'mail.deferred')],
     ['hard bounces', n(t, 'bounce.hard')],
     ['spam complaints', n(t, 'complaint')],
+    ['subscribe pages shown', n(t, 'sub.previewed')],
     ['subscriptions requested', n(t, 'sub.requested')],
     ['  confirmed', n(t, 'sub.confirmed')],
     ['  stopped', n(t, 'sub.stopped')],

@@ -3,7 +3,7 @@
 Email updates for any Atom or RSS feed. A reader follows a plain link next to the feed, sees
 what they are about to follow, enters an address and confirms. From then on they get each new
 entry, or a daily or weekly digest. No account, no password, no JavaScript, no tracking.
-English and French.
+English and French; German and Spanish awaiting review.
 
 FeedNotice is self-hosted: one small server runs the web app, a send-only mail server and an
 HTTPS proxy, all in Docker.
@@ -11,8 +11,11 @@ HTTPS proxy, all in Docker.
 - **[Deploy](docs/deploy.md)**: server, DNS, install, checks, warm-up, backups
 - [Design](docs/design.md): journey, architecture, data model, deduplication, deliverability
 - [Branding](docs/branding.md): your service's name, logo, favicons and colours
+- [Your own pages](docs/pages.md): pricing, help, news (with its own feed), for search engines
+- [Translations](docs/translations.md): adding a language, reviewing German and Spanish
 - [Privacy](docs/privacy.md): what is stored, for how long; a starting point for your GDPR register
 - [For publishers](docs/for-publishers.md): the link to add next to a feed, WebSub, the publisher space
+- [WordPress plugin](integrations/wordpress/README.md): the link or button after posts, in a widget, as a shortcode
 - [Name and logo](TRADEMARKS.md): run the code under your own name
 - [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
@@ -88,6 +91,7 @@ in the email dropped into `data/outbox/`. Add `&lang=fr` for French.
 | `node src/cli.ts dkim-keygen` | creates the DKIM key (unless it exists) and prints the DNS record |
 | `node src/cli.ts bounce < message` | reads one bounce from standard input (manual use) |
 | `node src/cli.ts doctor` | checks settings, DNS (A, PTR, MX, SPF, DKIM, DMARC), port 25, HTTPS, Spamhaus |
+| `node src/cli.ts block feed\|domain\|address <value> [reason]` | stops carrying a feed or a whole domain (subscribers told, subscriptions ended), or never writes to an address again; `unblock …` undoes, `blocks` lists |
 | `node src/cli.ts stats [days]` | counters per day (default 14): sent, bounces, complaints, subscriptions; current state |
 
 In Docker: `docker compose exec app node src/cli.ts <command>`.
@@ -117,11 +121,12 @@ lists them with example values.
 | `LEGAL_*`, `HOST_*` | — | legal notice at `/legal`: publisher, registration, publication director, host |
 | `SOURCE_URL` | this repository | "Source code" link in every page footer (AGPL): point it to your copy if you change the code |
 | `BRAND_PATH` | none (neutral) | folder with your logo, favicons and colours ([docs/branding.md](docs/branding.md)) |
+| `PAGES_PATH` | none | folder with your own pages and news ([docs/pages.md](docs/pages.md)) |
 | `POLL_INTERVAL_MINUTES` | `30` | bounded to 15–60 |
 | `PENDING_TTL_DAYS`, `SUSPENDED_TTL_DAYS` | `7`, `90` | erasure of unconfirmed requests and suspended addresses |
 | `DIGEST_HOUR`, `DIGEST_WEEKDAY`, `TIME_ZONE` | `7`, `1` (Monday), `Europe/Paris` | default digest schedule; subscribers can choose their own |
 | `BURST_LIMIT` | `5` | above this, new entries from one read go out as one email |
-| `MAIL_TRANSPORT`, `SMTP_HOST`, `SMTP_PORT` | `outbox`, —, `25` | set by `compose.yaml` to the `mta` container |
+| `MAIL_TRANSPORT`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | `outbox`, —, `25` | `compose.yaml` points them at the `mta` container; set `SMTP_*` in `.env` to use a provider's relay instead ([deploy](docs/deploy.md#if-the-sending-ip-gets-blocklisted)) |
 | `TRUST_PROXY` | `0` | `1` behind Caddy (set by `compose.yaml`) |
 | `RUN_SCHEDULER` | `1` | `0` to run rounds from outside (`poll`) |
 | `ALLOW_PRIVATE_FEEDS` | `0` | `1` only for local tests |
@@ -146,10 +151,11 @@ src/
   websub.ts          WebSub: hub subscription, verification, signed notifications
   stats.ts, ops.ts   operator counters, daily report, alerts
   doctor.ts          setup checker
+  blocks.ts          the operator's blocks: feeds, domains, addresses
   backup.ts          nightly local copies, off-site backup status
-  i18n/              en (reference) and fr message catalogs
+  i18n/              en (reference), fr, de and es message catalogs
   mail/              templates, SMTP sending with DKIM, sending caps, bounce parsing
-  web/               HTTP server, pages without JavaScript, branding
+  web/               HTTP server, pages without JavaScript, branding, the operator's pages
   db.ts              SQLite schema and migrations
 docker/mta/          send-only Postfix image (mail log kept 14 days)
 docker/backup/       restic image: encrypted off-site backups, weekly restore test

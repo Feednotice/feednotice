@@ -20,6 +20,7 @@ const feedErrors: Record<FeedErrorCode, string> = {
   unexpected: 'le serveur a donné une réponse inattendue.',
   'no-feed-found': "cette page n'annonce aucun flux Atom ou RSS.",
   'several-feeds': 'cette page annonce plusieurs flux.',
+  blocked: "il n'est pas disponible sur ce service.",
 };
 
 export const fr: Messages = {
@@ -240,6 +241,10 @@ export const fr: Messages = {
   publishedBy: (name) => `Publié par ${name}`,
   verifiedDomain: (domain) => `domaine vérifié ${domain}`,
 
+  newsTitle: 'Actualités',
+  newsFollow: 'Suivre ces actualités :',
+  newsByEmail: 'par courriel',
+  newsFeed: 'flux Atom',
   robotTitle: 'Le robot',
   robotHeading: 'Le robot qui lit vos flux',
   robotIntro: (service) =>
@@ -398,6 +403,17 @@ export const fr: Messages = {
     footerNoTracking: (service) => `${service} ne suit ni l'ouverture de ses courriels ni les clics sur leurs liens.`,
     digestHeading: { daily: 'Les nouveautés du jour', weekly: 'Les nouveautés de la semaine', burst: (n) => `${n} nouveautés d'un coup` },
     count: (n) => (n === 1 ? '1 nouveauté' : `${n} nouveautés`),
+    removedSubject: (feed) => `« ${feed} » n'est plus disponible`,
+    removedBody: (p) => `Bonjour,
+
+Le flux « ${p.feed} » (${p.url}) a été retiré de ${p.service}.
+Votre abonnement à ce flux a pris fin. Si c'était votre seul abonnement, votre adresse a été
+effacée. Vous n'avez rien à faire.
+
+Questions : ${p.contact}
+
+--
+${p.service}`,
     deadSubject: (feed) => `« ${feed} » ne répond plus`,
     deadBody: (p) => [
       `Bonjour,`,

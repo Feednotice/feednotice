@@ -1,6 +1,7 @@
 // Reading feeds: preview at subscription time, then periodic polling.
 // One request per feed, whatever the number of subscribers.
 
+import { isBlocked } from './blocks.ts';
 import type { Ctx } from './context.ts';
 import { transaction } from './db.ts';
 import { discoverFeeds, looksLikeHtml, type DiscoveredFeed } from './feed/discover.ts';
@@ -84,10 +85,14 @@ function parsed(url: string, fetched: Extract<FetchResult, { kind: 'ok' }>): Loa
 const previewCache = new Map<string, { at: number; result: LoadedFeed }>();
 const PREVIEW_CACHE_SIZE = 50;
 
+const BLOCKED: LoadResult = { ok: false, code: 'blocked', message: 'This feed is blocked on this service.' };
+
 export async function loadFeedCached(ctx: Ctx, url: string): Promise<LoadResult> {
+  if (isBlocked(ctx, url)) return BLOCKED;
   const hit = previewCache.get(url);
-  if (hit && ctx.now() - hit.at < 5 * MINUTE) return hit.result;
+  if (hit && ctx.now() - hit.at < 5 * MINUTE) return isBlocked(ctx, hit.result.url, hit.result.fetched.finalUrl) ? BLOCKED : hit.result;
   const result = await loadFeed(ctx, url);
+  if (result.ok && isBlocked(ctx, result.url, result.fetched.finalUrl)) return BLOCKED;
   if (!result.ok) return result;
   const lean: LoadedFeed = { ...result, fetched: { ...result.fetched, body: '' } };
   previewCache.delete(url);

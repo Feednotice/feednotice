@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { checkAlerts, sendOpsReport, statsText } from '../src/ops.ts';
+import { checkAlerts, funnelProblems, renderReport, sendOpsReport, statsText } from '../src/ops.ts';
 import { count, dayOf, totals } from '../src/stats.ts';
 import { handleMailEvent } from '../src/subscriptions.ts';
 import { HOUR, makeCtx } from './helpers.ts';
@@ -52,6 +52,17 @@ describe('operator', () => {
     ctx.clock.t += 6 * HOUR + 1;
     assert.equal((await checkAlerts(ctx)).length, 1);
     assert.ok(ctx.logs.some((l) => l.startsWith('ALERT: spam complaint rate')));
+  });
+
+  it('flags a week where few subscription requests get confirmed', () => {
+    const ctx = makeCtx();
+    assert.deepEqual(funnelProblems({ 'sub.requested': 10, 'sub.confirmed': 1 }), [], 'too few to judge');
+    assert.deepEqual(funnelProblems({ 'sub.requested': 40, 'sub.confirmed': 30 }), []);
+    const [p] = funnelProblems({ 'sub.requested': 40, 'sub.confirmed': 8 });
+    assert.match(p.text, /^only 20% of subscription requests confirmed this week/);
+    const report = renderReport(ctx, '2026-08-31', { 'sub.previewed': 300, 'sub.requested': 40, 'sub.confirmed': 8 }, {});
+    assert.match(report.subject, /Needs attention/);
+    assert.match(report.text, /subscribe pages shown\s+300/);
   });
 
   it('sends nothing without OPS_EMAIL, but still logs alerts', async () => {

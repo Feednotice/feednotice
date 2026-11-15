@@ -16,7 +16,7 @@ describe('migrations', () => {
       // A version 1 database, as the first release created it.
       const v1 = openDb(file);
       v1.exec('PRAGMA user_version = 1');
-      v1.exec('DROP TABLE publisher_domains; DROP TABLE publishers; DROP TABLE stats_daily; DROP TABLE state;');
+      v1.exec('DROP TABLE publisher_domains; DROP TABLE publishers; DROP TABLE stats_daily; DROP TABLE state; DROP TABLE blocked_feeds;');
       v1.exec('ALTER TABLE feeds DROP COLUMN dead_at; ALTER TABLE subscriptions DROP COLUMN dead_notice_at;');
       v1.exec('DROP INDEX entry_keys_entry; DROP INDEX deliveries_entry; DROP INDEX deliveries_updated; DROP INDEX deliveries_failed; DROP INDEX entries_seen;');
       v1.exec('ALTER TABLE feeds DROP COLUMN self_url; ALTER TABLE feeds DROP COLUMN websub_expires_at; ALTER TABLE feeds DROP COLUMN websub_requested_at;');

@@ -178,6 +178,15 @@ const MIGRATIONS: string[] = [
   CREATE INDEX deliveries_failed ON deliveries(updated_at) WHERE status = 'failed';
   CREATE INDEX entries_seen ON entries(first_seen_at) WHERE baseline = 0;
   `,
+  // 5: feeds and domains the operator blocked (src/blocks.ts).
+  `
+  CREATE TABLE blocked_feeds (
+    pattern    TEXT PRIMARY KEY,
+    kind       TEXT NOT NULL CHECK (kind IN ('feed', 'domain')),
+    reason     TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export const SCHEMA_VERSION = 1 + MIGRATIONS.length;

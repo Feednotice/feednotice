@@ -6,7 +6,7 @@ import http from 'node:http';
 import net from 'node:net';
 import type { Ctx } from '../context.ts';
 import { loadFeedCached, normalizeFeedUrl } from '../feeds.ts';
-import { isLocale, negotiate, type Locale } from '../i18n/index.ts';
+import { isLocale, LOCALES, negotiate, type Locale } from '../i18n/index.ts';
 import { parseBounce } from '../mail/bounce.ts';
 import { recipientTagger } from '../mail/mailer.ts';
 import { unsubscribeUrl } from '../mail/render.ts';
@@ -20,9 +20,11 @@ import {
   addDomain, defaultVerifyDeps, deletePublisher, listDomains, openPublisher, publisherForFeedUrl, publisherStats,
   removeDomain, requestPublisherLink, updateProfile, verifyDomain,
 } from '../publishers.ts';
+import { count } from '../stats.ts';
 import { fingerprint, verifyEmailToken, verifyToken } from '../tokens.ts';
 import { feedForCallback, notify, verifyIntent } from '../websub.ts';
 import { loadBrand, type Brand } from './brand.ts';
+import { loadPages, newsItems, NO_PAGES, pageIn } from './pages.ts';
 import * as v from './views.ts';
 
 type Req = http.IncomingMessage;
@@ -110,7 +112,7 @@ function brandingFor(ctx: Ctx, loaded: { url: string; fetched: { finalUrl: strin
 }
 
 export function createServer(ctx: Ctx): http.Server {
-  const brand = loadBrand(ctx.config.brandDir);
+  const brand = { ...loadBrand(ctx.config.brandDir), pages: loadPages(ctx.config.pagesDir, ctx.log) };
   return http.createServer((req, res) => {
     handle(ctx, brand, req, res).catch((e: Error & { status?: number }) => {
       ctx.log(`error ${req.method} ${req.url?.split('?')[0]}: ${e.stack}`);
@@ -219,6 +221,7 @@ async function handle(ctx: Ctx, brand: Brand, req: Req, res: Res): Promise<void>
     const loaded = await loadFeedCached(ctx, feedUrl);
     if (!loaded.ok && loaded.candidates) return send(res, 200, v.chooseFeedPage(p, loaded.candidates));
     if (!loaded.ok) return send(res, 422, v.feedErrorPage(p, feedUrl, p.m.feedError(loaded.code)));
+    count(ctx, 'sub.previewed');
     return send(res, 200, v.subscribePage(p, loaded.url, loaded.feed, { publisher: brandingFor(ctx, loaded) }));
   }
   if (method === 'POST' && path === '/s') {
@@ -396,6 +399,70 @@ async function handle(ctx: Ctx, brand: Brand, req: Req, res: Res): Promise<void>
     return send(res, 200, 'ok', 'text/plain; charset=utf-8');
   }
 
+  // --- The operator's own pages, news and what search engines read ---
+  if (method === 'GET') {
+    const pages = brand.pages ?? NO_PAGES;
+    const asset = pages.assets.get(path);
+    if (asset) return send(res, 200, asset.body, asset.type, { 'Cache-Control': 'public, max-age=86400' });
+    const variants = pages.byPath.get(path);
+    if (variants) {
+      const p = v.page(config, brand, locale(), here);
+      return send(res, 200, v.sitePage(p, pageIn(variants, p.locale, config.defaultLocale)), undefined, { 'Cache-Control': 'public, max-age=300' });
+    }
+    if (path === '/news') {
+      const p = v.page(config, brand, locale(), here);
+      const items = newsItems(pages, p.locale, config.defaultLocale);
+      if (items.length) return send(res, 200, v.newsPage(p, items), undefined, { 'Cache-Control': 'public, max-age=300' });
+    }
+    if (path === '/news.xml') {
+      const lang = locale();
+      const items = newsItems(pages, lang, config.defaultLocale);
+      if (items.length) return send(res, 200, newsFeed(config, lang, items), 'application/atom+xml; charset=utf-8', { 'Cache-Control': 'public, max-age=600' });
+    }
+    if (path === '/robots.txt') {
+      return send(res, 200, `User-agent: *\nDisallow: /c/\nDisallow: /u/\nDisallow: /m/\nDisallow: /p/\nDisallow: /websub/\nDisallow: /hooks/\n\nSitemap: ${config.baseUrl}/sitemap.xml\n`, 'text/plain; charset=utf-8', { 'Cache-Control': 'public, max-age=86400' });
+    }
+    if (path === '/sitemap.xml') return send(res, 200, sitemap(config, brand), 'application/xml; charset=utf-8', { 'Cache-Control': 'public, max-age=3600' });
+  }
+
   const p = v.page(config, brand, locale(), here);
   send(res, 404, v.messagePage(p, p.m.notFoundTitle, p.m.notFoundText));
+}
+
+const xml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c] as string);
+
+/** The operator's news as an Atom feed: the service's own news can be followed by email, too. */
+function newsFeed(config: Ctx['config'], locale: Locale, items: ReturnType<typeof newsItems>): string {
+  const m = v.page(config, { files: new Map(), css: '' }, locale).m;
+  const iso = (ms: number) => new Date(ms).toISOString();
+  return `<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="${locale}" xml:base="${xml(config.baseUrl)}/">
+<title>${xml(`${m.newsTitle} — ${config.serviceName}`)}</title>
+<id>${xml(`${config.baseUrl}/news.xml?lang=${locale}`)}</id>
+<link rel="self" href="${xml(`${config.baseUrl}/news.xml?lang=${locale}`)}"/>
+<link rel="alternate" type="text/html" href="${xml(`${config.baseUrl}/news?lang=${locale}`)}"/>
+<updated>${iso(items[0].date as number)}</updated>
+${items.map((i) => `<entry>
+<id>${xml(`${config.baseUrl}${i.path}`)}</id>
+<title>${xml(i.title)}</title>
+<link rel="alternate" type="text/html" href="${xml(`${config.baseUrl}${i.path}?lang=${locale}`)}"/>
+<published>${iso(i.date as number)}</published>
+<updated>${iso(i.date as number)}</updated>
+${i.description ? `<summary>${xml(i.description)}</summary>\n` : ''}<content type="html">${xml(i.html)}</content>
+</entry>`).join('\n')}
+</feed>
+`;
+}
+
+/** Every public page, with its other languages, for search engines. */
+function sitemap(config: Ctx['config'], brand: Brand): string {
+  const pages = brand.pages ?? NO_PAGES;
+  const paths = ['/', '/publishers', '/privacy', '/terms', '/legal', '/robot', ...pages.byPath.keys()];
+  if (newsItems(pages, config.defaultLocale, config.defaultLocale).length) paths.push('/news');
+  const at = (path: string, l: string) => `${config.baseUrl}${path}?lang=${l}`;
+  return `<?xml version="1.0" encoding="utf-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+${paths.flatMap((path) => LOCALES.map((l) => `<url><loc>${xml(at(path, l))}</loc>${LOCALES.map((a) => `<xhtml:link rel="alternate" hreflang="${a}" href="${xml(at(path, a))}"/>`).join('')}</url>`)).join('\n')}
+</urlset>
+`;
 }
