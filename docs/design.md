@@ -64,7 +64,7 @@ Choices worth explaining:
 ```mermaid
 flowchart LR
     R([Reader]) -- HTTPS --> C[caddy<br/>TLS, reverse proxy]
-    C --> A[app<br/>Node.js 24 + SQLite<br/>pages, feed reading, scheduler]
+    C --> A[app<br/>Node.js 26 + SQLite<br/>pages, feed reading, scheduler]
     A -- "SMTP :2525<br/>(internal network)" --> M[mta<br/>Postfix, send-only]
     M -- "SMTP :25<br/>DKIM-signed mail" --> X([Mailbox providers])
     X -. "bounces to feedback@…" .-> M
