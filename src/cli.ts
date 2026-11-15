@@ -7,12 +7,14 @@
 //   node src/cli.ts bounce < message     reads one bounce from standard input (manual use)
 //   node src/cli.ts stats [days]         operator counters per day, and the current state
 //   node src/cli.ts doctor               checks DNS, mail and HTTPS against the settings
+//   node src/cli.ts block feed|domain|address <value> [reason]   and unblock …, blocks (list)
 //
 // Configuration comes from environment variables (the .env file, loaded by Docker Compose).
 // Outside Docker, a .env file at the project root is read too.
 
 import { createPrivateKey, createPublicKey, generateKeyPairSync } from 'node:crypto';
 import { backup } from './backup.ts';
+import { block, blockAddress, listBlocks, unblock } from './blocks.ts';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { loadConfig } from './config.ts';
@@ -69,6 +71,29 @@ async function main(): Promise<void> {
       const events = parseBounce(Buffer.concat(chunks).toString('utf8'), recipientTagger(config.secret));
       for (const ev of events) handleMailEvent(ctx, ev.email, ev.type);
       ctx.log(`bounce: ${events.length} event(s)`);
+      process.exit(0);
+    }
+    case 'block':
+    case 'unblock': {
+      const [kind, value, ...reason] = process.argv.slice(3);
+      if (!['feed', 'domain', 'address'].includes(kind) || !value) {
+        console.error(`Usage: ${command} feed <url> | domain <domain> | address <email>${command === 'block' ? ' [reason]' : ''}`);
+        process.exit(2);
+      }
+      if (command === 'unblock') {
+        console.log(unblock(ctx, kind as 'feed' | 'domain' | 'address', value) ? 'unblocked' : 'not found');
+      } else if (kind === 'address') {
+        console.log(blockAddress(ctx, value) ? 'address blocked and erased' : 'not a valid address');
+      } else {
+        const r = await block(ctx, kind as 'feed' | 'domain', value, reason.join(' '));
+        console.log(r ? `blocked ${r.pattern}: ${r.feeds} feed(s) removed, ${r.notified} subscriber(s) told` : 'not a valid address or domain');
+      }
+      process.exit(0);
+    }
+    case 'blocks': {
+      const { feeds, addresses } = listBlocks(ctx);
+      for (const b of feeds) console.log(`${b.kind.padEnd(6)} ${b.pattern}  ${new Date(b.created_at).toISOString().slice(0, 10)}  ${b.reason}`);
+      console.log(`${feeds.length} feed(s) or domain(s); ${addresses} address(es) blocked (kept as fingerprints only)`);
       process.exit(0);
     }
     case 'stats':

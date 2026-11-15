@@ -88,6 +88,7 @@ in the email dropped into `data/outbox/`. Add `&lang=fr` for French.
 | `node src/cli.ts dkim-keygen` | creates the DKIM key (unless it exists) and prints the DNS record |
 | `node src/cli.ts bounce < message` | reads one bounce from standard input (manual use) |
 | `node src/cli.ts doctor` | checks settings, DNS (A, PTR, MX, SPF, DKIM, DMARC), port 25, HTTPS, Spamhaus |
+| `node src/cli.ts block feed\|domain\|address <value> [reason]` | stops carrying a feed or a whole domain (subscribers told, subscriptions ended), or never writes to an address again; `unblock …` undoes, `blocks` lists |
 | `node src/cli.ts stats [days]` | counters per day (default 14): sent, bounces, complaints, subscriptions; current state |
 
 In Docker: `docker compose exec app node src/cli.ts <command>`.
@@ -121,7 +122,7 @@ lists them with example values.
 | `PENDING_TTL_DAYS`, `SUSPENDED_TTL_DAYS` | `7`, `90` | erasure of unconfirmed requests and suspended addresses |
 | `DIGEST_HOUR`, `DIGEST_WEEKDAY`, `TIME_ZONE` | `7`, `1` (Monday), `Europe/Paris` | default digest schedule; subscribers can choose their own |
 | `BURST_LIMIT` | `5` | above this, new entries from one read go out as one email |
-| `MAIL_TRANSPORT`, `SMTP_HOST`, `SMTP_PORT` | `outbox`, —, `25` | set by `compose.yaml` to the `mta` container |
+| `MAIL_TRANSPORT`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | `outbox`, —, `25` | `compose.yaml` points them at the `mta` container; set `SMTP_*` in `.env` to use a provider's relay instead ([deploy](docs/deploy.md#if-the-sending-ip-gets-blocklisted)) |
 | `TRUST_PROXY` | `0` | `1` behind Caddy (set by `compose.yaml`) |
 | `RUN_SCHEDULER` | `1` | `0` to run rounds from outside (`poll`) |
 | `ALLOW_PRIVATE_FEEDS` | `0` | `1` only for local tests |
@@ -146,6 +147,7 @@ src/
   websub.ts          WebSub: hub subscription, verification, signed notifications
   stats.ts, ops.ts   operator counters, daily report, alerts
   doctor.ts          setup checker
+  blocks.ts          the operator's blocks: feeds, domains, addresses
   backup.ts          nightly local copies, off-site backup status
   i18n/              en (reference) and fr message catalogs
   mail/              templates, SMTP sending with DKIM, sending caps, bounce parsing

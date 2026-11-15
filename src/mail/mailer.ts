@@ -143,8 +143,10 @@ export function createMailer(config: Config): Mailer {
     host,
     port,
     secure: port === 465,
-    // The MTA container is reached over the private Docker network, without TLS.
+    // The MTA container is reached over the private Docker network, without TLS. A provider's
+    // relay (with a user name) must use TLS: never send the password in clear.
     ignoreTLS: port === 25 || port === 2525,
+    requireTLS: Boolean(user) && port !== 465 && port !== 25 && port !== 2525,
     auth: user ? { user, pass } : undefined,
     pool: true,
     maxConnections: 2,

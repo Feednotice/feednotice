@@ -367,11 +367,17 @@ subscription is always to the feed itself, never to the page.
 
 ## 12. Operating
 
+- **Blocks** (`cli.ts block`): a feed or a whole domain the service must not carry (unlawful
+  content, a court order, abuse) is refused from then on; its subscriptions end at once and each
+  subscriber gets a short notice. An address can be blocked too: erased, only its fingerprint
+  kept, never written to again.
+
 - **`cli.ts doctor`** checks a deployment as mailbox providers will see it: settings, A and PTR
   records, MX, SPF (following `include`), DKIM against the key file, DMARC, outbound port 25,
   HTTPS, and Spamhaus. It changes nothing and sends nothing; it exits with 1 if anything fails.
-- **Counters** (`stats_daily`): emails sent, bounces, complaints, subscriptions requested,
-  confirmed and stopped, feeds that died, per day. Numbers only. `cli.ts stats` prints them.
+- **Counters** (`stats_daily`): emails sent, bounces, complaints, subscribe pages shown,
+  subscriptions requested, confirmed and stopped, feeds that died, per day. A week where fewer
+  than 30% of requests are confirmed is flagged: confirmation emails are probably in spam. Numbers only. `cli.ts stats` prints them.
 - **Daily report** to `OPS_EMAIL` at `OPS_REPORT_HOUR`: yesterday, the last 7 days, the current
   state, and what needs attention.
 - **Alerts** to `OPS_EMAIL` (and the log) as soon as today's numbers cross a limit: hard

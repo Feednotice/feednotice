@@ -11,6 +11,7 @@ export type StatKey =
   | 'mail.deferred' // rounds stopped by the sending cap
   | 'bounce.hard'
   | 'complaint'
+  | 'sub.previewed' // subscribe pages shown (a feed read for a visitor)
   | 'sub.requested'
   | 'sub.confirmed'
   | 'sub.stopped'

@@ -3,7 +3,7 @@
 import type { FetchErrorCode } from '../feed/fetch.ts';
 import type { FeedParseErrorCode } from '../feed/parse.ts';
 
-export type FeedErrorCode = FetchErrorCode | FeedParseErrorCode | 'unexpected' | 'no-feed-found' | 'several-feeds';
+export type FeedErrorCode = FetchErrorCode | FeedParseErrorCode | 'unexpected' | 'no-feed-found' | 'several-feeds' | 'blocked';
 
 export interface LegalParams {
   service: string;
@@ -46,6 +46,7 @@ const feedErrors: Record<FeedErrorCode, string> = {
   unexpected: 'the server gave an unexpected answer.',
   'no-feed-found': 'this page does not announce any Atom or RSS feed.',
   'several-feeds': 'this page announces several feeds.',
+  blocked: 'it is not available on this service.',
 };
 
 export const en = {
@@ -446,6 +447,17 @@ export const en = {
     mergedUnsubscribeFeed: 'Unsubscribe from this feed',
     mergedWhy: (feeds: number, kind: 'daily' | 'weekly') => `You receive this ${kind} digest because this address is subscribed to these ${feeds} feeds.`,
     mergedStop: (kind: 'daily' | 'weekly') => `Stop this ${kind} digest`,
+    removedSubject: (feed: string) => `"${feed}" is no longer available`,
+    removedBody: (p: { feed: string; url: string; service: string; contact: string }) => `Hello,
+
+The feed "${p.feed}" (${p.url}) has been removed from ${p.service}.
+Your subscription to it has ended. If it was your only subscription, your address has been
+erased. There is nothing to do.
+
+Questions: ${p.contact}
+
+--
+${p.service}`,
     deadSubject: (feed: string) => `"${feed}" no longer answers`,
     deadBody: (p: { feed: string; url: string; since: string; until: string }): string[] => [
       `Hello,`,

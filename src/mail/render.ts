@@ -214,6 +214,18 @@ export function renderDeadFeedMail(config: Config, locale: Locale, feed: FeedRow
   };
 }
 
+/** The operator blocked the feed: the subscription has ended. */
+export function renderFeedRemovedMail(config: Config, locale: Locale, feed: FeedRow, to: string): OutgoingMail {
+  const m = messages(locale).mail;
+  return {
+    to,
+    fromName: config.serviceName,
+    subject: m.removedSubject(truncate(headerText(feed.title || hostOf(feed.url)), 100)),
+    text: m.removedBody({ feed: feed.title, url: feed.url, service: config.serviceName, contact: config.contactEmail }),
+    headers: { 'Auto-Submitted': 'auto-generated' },
+  };
+}
+
 export function renderConfirmationMail(config: Config, locale: Locale, feed: FeedRow, to: string, confirmUrl: string, cadence: Cadence): OutgoingMail {
   const msg = messages(locale);
   return {

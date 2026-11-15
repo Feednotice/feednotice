@@ -151,6 +151,26 @@ docker compose exec app node src/cli.ts stats 30
 An external uptime check on `https://example.org/health` covers the case where the whole server
 is down, which no email from it can report.
 
+## If the sending IP gets blocklisted
+
+Have a fallback ready before launch: an account at an email provider with an SMTP relay (in the
+EU if you serve people there), the sending domain verified there, its SPF include and DKIM
+record published alongside yours. Switching then takes a minute, in `.env`:
+
+```sh
+SMTP_HOST=smtp.provider.example
+SMTP_PORT=587
+SMTP_USER=…
+SMTP_PASS=…
+```
+
+then `docker compose up -d app`. The app keeps signing DKIM with your key, and uses TLS with the
+relay. Bounces now come from the provider: point its webhook at `/hooks/mail-events` (generic
+format, see `src/web/server.ts`) and remove the `respond /hooks/* 404` line from the Caddyfile
+for that path. Ask for delisting meanwhile (each blocklist has a form), then switch back by
+removing the four lines. The `mta` container keeps running and still receives bounces for mail
+it sent.
+
 ## Warm-up
 
 A new IP has no reputation. Large mailbox providers slow down or junk a sender whose volume

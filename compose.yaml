@@ -30,8 +30,9 @@ services:
       BACKUP_STATUS_DIR: /app/backup-status
       DB_PATH: /app/data/feednotice.sqlite
       MAIL_TRANSPORT: smtp
-      SMTP_HOST: mta
-      SMTP_PORT: "2525"
+      # The mta container; or a provider's relay, as a fallback (docs/deploy.md).
+      SMTP_HOST: ${SMTP_HOST:-mta}
+      SMTP_PORT: ${SMTP_PORT:-2525}
       TRUST_PROXY: "1"
     volumes:
       - app-data:/app/data

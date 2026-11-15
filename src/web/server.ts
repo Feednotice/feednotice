@@ -20,6 +20,7 @@ import {
   addDomain, defaultVerifyDeps, deletePublisher, listDomains, openPublisher, publisherForFeedUrl, publisherStats,
   removeDomain, requestPublisherLink, updateProfile, verifyDomain,
 } from '../publishers.ts';
+import { count } from '../stats.ts';
 import { fingerprint, verifyEmailToken, verifyToken } from '../tokens.ts';
 import { feedForCallback, notify, verifyIntent } from '../websub.ts';
 import { loadBrand, type Brand } from './brand.ts';
@@ -219,6 +220,7 @@ async function handle(ctx: Ctx, brand: Brand, req: Req, res: Res): Promise<void>
     const loaded = await loadFeedCached(ctx, feedUrl);
     if (!loaded.ok && loaded.candidates) return send(res, 200, v.chooseFeedPage(p, loaded.candidates));
     if (!loaded.ok) return send(res, 422, v.feedErrorPage(p, feedUrl, p.m.feedError(loaded.code)));
+    count(ctx, 'sub.previewed');
     return send(res, 200, v.subscribePage(p, loaded.url, loaded.feed, { publisher: brandingFor(ctx, loaded) }));
   }
   if (method === 'POST' && path === '/s') {
