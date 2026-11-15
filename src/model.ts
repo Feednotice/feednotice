@@ -50,6 +50,11 @@ export interface SubscriptionRow {
   digest_hour: number | null;
   digest_weekday: number | null;
   dead_notice_at: number | null;
+  /** Watch plan (src/watch.ts): comma-separated words or phrases; empty = no filter. */
+  include_words: string;
+  exclude_words: string;
+  paused_from: number | null;
+  paused_until: number | null;
 }
 
 export interface SubscriberRow {
@@ -58,4 +63,7 @@ export interface SubscriberRow {
   locale: Locale;
   created_at: number;
   status: 'active' | 'suspended';
+  plan: 'free' | 'watch';
+  /** End of the plan (ms); null: no end. */
+  plan_until: number | null;
 }

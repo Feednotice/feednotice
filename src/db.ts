@@ -209,6 +209,17 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (feed_id, week)
   ) WITHOUT ROWID;
   `,
+  // 7: the readers' paid plan (src/watch.ts): keyword filters and pauses per subscription.
+  // An entry a filter or a pause holds back is recorded in deliveries as 'sent' with
+  // attempts = 0: handled, never sent (a real send always counts one attempt or more).
+  `
+  ALTER TABLE subscribers ADD COLUMN plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'watch'));
+  ALTER TABLE subscribers ADD COLUMN plan_until INTEGER;
+  ALTER TABLE subscriptions ADD COLUMN include_words TEXT NOT NULL DEFAULT '';
+  ALTER TABLE subscriptions ADD COLUMN exclude_words TEXT NOT NULL DEFAULT '';
+  ALTER TABLE subscriptions ADD COLUMN paused_from INTEGER;
+  ALTER TABLE subscriptions ADD COLUMN paused_until INTEGER;
+  `,
 ];
 
 export const SCHEMA_VERSION = 1 + MIGRATIONS.length;

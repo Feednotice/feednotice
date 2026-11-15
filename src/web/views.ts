@@ -14,6 +14,7 @@ import {
   type DomainRow, type FeedStats, type Plan, type PublisherRow, type WeekRow,
 } from '../publishers.ts';
 import type { SubscriptionListItem } from '../subscriptions.ts';
+import { WORDS_MAX } from '../watch.ts';
 import type { Brand } from './brand.ts';
 import { navPages, newsItems, pageIn, type SitePage } from './pages.ts';
 
@@ -359,17 +360,40 @@ export function accountLinkSentPage(p: Page): string {
 <p>${esc(p.m.accountSentText)}</p>`);
 }
 
-export function accountPage(p: Page, action: string, email: string, subs: SubscriptionListItem[]): string {
-  const { m } = p;
+/** The reader's paid plan, as the account page needs it. */
+export interface AccountExtras {
+  now: number;
+  watch: boolean;
+  planUntil: number | null;
+  result: string | null;
+}
+
+export function accountPage(
+  p: Page, action: string, email: string, subs: SubscriptionListItem[],
+  extras: AccountExtras = { now: Date.now(), watch: false, planUntil: null, result: null },
+): string {
+  const { m, config, locale } = p;
   const hidden = (name: string, value: string | number) => `<input type="hidden" name="${name}" value="${esc(String(value))}">`;
+  const { now } = extras;
+  const pauseState = (s: SubscriptionListItem): string | null => {
+    if (s.paused_from === null || (s.paused_until !== null && s.paused_until <= now)) return null;
+    return s.paused_until === null ? m.accountPausedOpen : m.accountPausedUntil(formatDate(locale, config.timeZone, s.paused_until));
+  };
+  const tags = (s: SubscriptionListItem): string => {
+    if (!extras.watch) return '';
+    const t = [pauseState(s), s.include_words || s.exclude_words ? m.accountFiltered : null].filter(Boolean) as string[];
+    return t.length ? `<br><span class="muted">${esc(t.join(' · '))}</span>` : '';
+  };
+  const notice = extras.result && Object.hasOwn(m.accountResult, extras.result) ? `<p class="notice" role="status">${esc(m.accountResult[extras.result])}</p>` : '';
   return layout(p, m.accountTitle, `
 <h1>${esc(m.accountTitle)}</h1>
-<p class="muted">${esc(m.accountAddress(email))}</p>
+<p class="muted">${esc(m.accountAddress(email))}${extras.watch ? ` · ${esc(m.accountPlan(m.watchPlanName))}${extras.planUntil ? ` ${esc(m.publisherPlanUntil(formatDate(locale, config.timeZone, extras.planUntil)))}` : ''}` : ''}</p>
+${notice}
 ${subs.length === 0 ? `<p>${esc(m.accountNone)}</p>` : `<table>
 <thead><tr><th>${esc(m.accountColFeed)}</th><th>${esc(m.accountColCadence)}</th><th>${esc(m.accountColWhen)}</th><th></th></tr></thead>
 <tbody>
 ${subs.map((s) => `<tr>
-<td><a href="${esc(s.site_url ?? s.feed_url)}">${esc(s.feed_title)}</a>${s.status === 'pending' ? `<br><span class="muted">${esc(m.accountPending)}</span>` : ''}</td>
+<td><a href="${esc(s.site_url ?? s.feed_url)}">${esc(s.feed_title)}</a>${s.status === 'pending' ? `<br><span class="muted">${esc(m.accountPending)}</span>` : tags(s)}</td>
 <td><form action="${esc(action)}" method="post">
 ${hidden('action', 'cadence')}${hidden('subscription', s.id)}${langInput(p)}
 <select name="cadence" aria-label="${esc(m.accountCadenceAria(s.feed_title))}">${CADENCES.map((c) => `<option value="${c}"${c === s.cadence ? ' selected' : ''}>${esc(m.cadence[c])}</option>`).join('')}</select>
@@ -380,12 +404,52 @@ ${hidden('action', 'stop')}${hidden('subscription', s.id)}${langInput(p)}
 <button class="quiet" type="submit">${esc(m.accountStop)}</button></form></td>
 </tr>`).join('\n')}
 </tbody></table>`}
+${subs.some((s) => s.status === 'active') ? watchSection(p, action, subs.filter((s) => s.status === 'active'), extras.watch, pauseState) : ''}
 <h2>${esc(m.accountDeleteHeading)}</h2>
 <form action="${esc(action)}" method="post">
 ${hidden('action', 'delete-all')}${langInput(p)}
 <p>${esc(m.accountDeleteText)}</p>
 <button type="submit">${esc(m.accountDeleteButton)}</button>
 </form>`);
+}
+
+/** Keyword filters and pauses, per subscription (watch plan); without it, one line about it. */
+function watchSection(p: Page, action: string, subs: SubscriptionListItem[], watch: boolean, pauseState: (s: SubscriptionListItem) => string | null): string {
+  const { m, config, locale } = p;
+  if (!watch) {
+    const pricing = p.brand.pages?.byPath.get('/pricing');
+    return `<p class="muted">${esc(m.accountWatchHint(m.watchPlanName))}${pricing ? ` <a href="${esc(withLang('/pricing', locale))}">${esc(pageIn(pricing, locale, config.defaultLocale).title)}</a>` : ''}</p>`;
+  }
+  const hidden = (name: string, value: string | number) => `<input type="hidden" name="${name}" value="${esc(String(value))}">`;
+  return `
+<h2>${esc(m.accountWatchHeading)}</h2>
+<p>${esc(m.accountWatchIntro)}</p>
+${subs.map((s) => {
+    const paused = pauseState(s);
+    const options = [
+      ...(paused ? [`<option value="keep" selected>${esc(paused)}</option>`] : []),
+      `<option value="resume"${paused ? '' : ' selected'}>${esc(m.accountPauseNone)}</option>`,
+      ...[7, 14, 30].map((d) => `<option value="${d}">${esc(m.accountPauseDays(d))}</option>`),
+      `<option value="open">${esc(m.accountPauseOpen)}</option>`,
+    ];
+    return `<details class="growth"${s.include_words || s.exclude_words || paused ? ' open' : ''}><summary>${esc(s.feed_title)}</summary>
+<form action="${esc(action)}" method="post">
+${hidden('action', 'filters')}${hidden('subscription', s.id)}${langInput(p)}
+<label for="inc-${s.id}">${esc(m.accountIncludeLabel)}</label>
+<input id="inc-${s.id}" name="include" type="text" maxlength="${WORDS_MAX}" value="${esc(s.include_words)}">
+<label for="exc-${s.id}">${esc(m.accountExcludeLabel)}</label>
+<input id="exc-${s.id}" name="exclude" type="text" maxlength="${WORDS_MAX}" value="${esc(s.exclude_words)}">
+<button class="quiet" type="submit">${esc(m.accountFiltersSave)}</button>
+</form>
+<form action="${esc(action)}" method="post">
+${hidden('action', 'pause')}${hidden('subscription', s.id)}${langInput(p)}
+<label for="pause-${s.id}">${esc(m.accountPauseLabel)}</label>
+<select id="pause-${s.id}" name="pause">${options.join('')}</select>
+<button class="quiet" type="submit">${esc(m.accountPauseSave)}</button>
+</form>
+</details>`;
+  }).join('\n')}
+<p class="muted">${esc(m.accountPauseNote)}</p>`;
 }
 
 /** Digest hour (and day, for weekly digests), chosen by the subscriber. */

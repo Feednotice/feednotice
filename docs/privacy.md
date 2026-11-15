@@ -16,7 +16,7 @@ documentation, not legal advice.
 | Purpose | Emailing, at their request, the new entries of the Atom/RSS feeds people chose; service emails (confirmation, access link to their subscriptions) |
 | Legal basis | Consent (article 6(1)(a)), collected by double opt-in; withdrawn at any time by unsubscribing |
 | Data subjects | People who ask to receive a feed's updates |
-| Data | Email address. Attached to it: feeds followed, cadence, digest time and day, language, dates of request, confirmation and last digest, status (active / suspended) |
+| Data | Email address. Attached to it: feeds followed, cadence, digest time and day, language, dates of request, confirmation and last digest, status (active / suspended). With a paid plan for readers ("watch"): the plan and its end date, and per feed the words the reader filters on and their pauses. Filter words can reveal interests: they are shown to no one but the reader, and erased with the subscription |
 | Not collected | Name, password, cleartext IP address, cookies, opens, clicks, device, location |
 | Recipients | The operator; its processor [hosting provider], which hosts the server that runs the service and sends the emails. Mailbox providers receive the emails addressed to their users. Feed publishers only receive subscriber counts |
 | Transfers outside the EU | None by the operator, provided the server is in the EU. Delivering an email to an address hosted outside the EU (e.g. Gmail) is done at the recipient's request |

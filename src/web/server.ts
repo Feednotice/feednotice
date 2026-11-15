@@ -21,6 +21,7 @@ import {
   publisherForLoadedFeed, publisherGrowth, publisherStats, removeDomain, requestPublisherLink, setLogo, updateProfile, verifyDomain,
 } from '../publishers.ts';
 import { count } from '../stats.ts';
+import { readerHasWatch, setFilters, setPause } from '../watch.ts';
 import { fingerprint, verifyEmailToken, verifyToken } from '../tokens.ts';
 import { feedForCallback, notify, verifyIntent } from '../websub.ts';
 import { loadBrand, type Brand } from './brand.ts';
@@ -331,7 +332,9 @@ async function handle(ctx: Ctx, brand: Brand, req: Req, res: Res): Promise<void>
       if (!subscriber) return send(res, 404, v.messagePage(p, p.m.expiredTitle, p.m.manageExpiredText));
       // Switching language here also switches the language of the emails.
       if (isLocale(explicitLang) && explicitLang !== subscriber.locale) setLocale(ctx, subscriber.id, explicitLang);
-      return send(res, 200, v.accountPage(p, path, subscriber.email, listSubscriptions(ctx, subscriber.id)));
+      return send(res, 200, v.accountPage(p, path, subscriber.email, listSubscriptions(ctx, subscriber.id), {
+        now, watch: readerHasWatch(subscriber, now), planUntil: subscriber.plan_until, result: url.searchParams.get('result'),
+      }));
     }
     if (method === 'POST') {
       const form = await readForm(req);
@@ -354,8 +357,18 @@ async function handle(ctx: Ctx, brand: Brand, req: Req, res: Res): Promise<void>
         const weekday = form.has('day') ? Number(form.get('day')) : null;
         setDigestSchedule(ctx, subscriber.id, subId, hour, weekday);
       }
+      let result = '';
+      if (owned && readerHasWatch(subscriber, now) && action === 'filters') {
+        result = setFilters(ctx, subscriber.id, subId, form.get('include') ?? '', form.get('exclude') ?? '');
+      }
+      if (owned && readerHasWatch(subscriber, now) && action === 'pause') {
+        const choice = form.get('pause') ?? 'keep';
+        const days = choice === 'resume' ? 0 : choice === 'open' ? null : [7, 14, 30].includes(Number(choice)) ? Number(choice) : undefined;
+        if (days !== undefined) setPause(ctx, subscriber.id, subId, days);
+        result = 'saved';
+      }
       if (!getSubscriber(ctx, subscriber.id)) return send(res, 200, v.unsubscribedPage(p));
-      return redirect(res, `${path}?lang=${p.locale}`);
+      return redirect(res, `${path}?lang=${p.locale}${result ? `&result=${result}` : ''}`);
     }
   }
 

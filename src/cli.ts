@@ -10,6 +10,7 @@
 //   node src/cli.ts block feed|domain|address <value> [reason]   and unblock …, blocks (list)
 //   node src/cli.ts publisher plan <email|domain> free|pro|business [until YYYY-MM-DD]
 //   node src/cli.ts publishers           publishers with a verified domain or a paid plan
+//   node src/cli.ts reader plan <email> free|watch [until YYYY-MM-DD]   readers' paid plan
 //
 // Configuration comes from environment variables (the .env file, loaded by Docker Compose).
 // Outside Docker, a .env file at the project root is read too.
@@ -30,6 +31,7 @@ import { flushSends } from './mail/quota.ts';
 import { statsText } from './ops.ts';
 import { findPublisher, listPublishers, PLANS, setPlan, type Plan } from './publishers.ts';
 import { purge } from './purge.ts';
+import { findReader, READER_PLANS, setReaderPlan, type ReaderPlan } from './watch.ts';
 import { handleMailEvent } from './subscriptions.ts';
 import { createServer } from './web/server.ts';
 
@@ -115,6 +117,24 @@ async function main(): Promise<void> {
       }
       setPlan(ctx, publisher.id, plan as Plan, end);
       console.log(`publisher ${publisher.id}: ${plan}${plan !== 'free' ? (end ? ` until ${until}` : ', no end date') : ''}`);
+      break;
+    }
+    case 'reader': {
+      const [sub, who, plan, until] = process.argv.slice(3);
+      const end = until ? Date.parse(`${until}T23:59:59Z`) : null;
+      if (sub !== 'plan' || !who || !(READER_PLANS as readonly string[]).includes(plan ?? '') || (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) || Number.isNaN(end)) {
+        console.error('Usage: reader plan <email> free|watch [until YYYY-MM-DD]');
+        process.exitCode = 2;
+        break;
+      }
+      const reader = findReader(ctx, who);
+      if (!reader) {
+        console.error('No subscriber with this address.');
+        process.exitCode = 1;
+        break;
+      }
+      setReaderPlan(ctx, reader.id, plan as ReaderPlan, end);
+      console.log(`subscriber ${reader.id}: ${plan}${plan !== 'free' ? (end ? ` until ${until}` : ', no end date') : ''}`);
       break;
     }
     case 'publishers': {

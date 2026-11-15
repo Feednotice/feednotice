@@ -169,14 +169,22 @@ erDiagram
         int last_digest_at
         int digest_hour "subscriber's choice, or default"
         int digest_weekday "subscriber's choice, or default"
+        text include_words "watch plan: words to include"
+        text exclude_words "watch plan: words to exclude"
+        int paused_from "watch plan: pause"
+        int paused_until
     }
     deliveries {
         int subscription_id
         int entry_id
         text status "sending | sent | failed"
-        int attempts
+        int attempts "0 with sent: held back by a filter or a pause"
     }
 ```
+
+An entry that a reader's filters or pause hold back (watch plan, `src/watch.ts`) is recorded in
+`deliveries` as `sent` with no attempt: handled, never sent, never looked at again. A real send
+always counts one attempt or more, so the two cannot be confused.
 
 Three side tables hold no cleartext data:
 
