@@ -6,13 +6,17 @@ setting that must be changed is called out under **Upgrading**. Images:
 
 ## Unreleased
 
-**Upgrading**: the database schema goes from 5 to 6 at start-up (publisher plans, logos and
-weekly counts).
+**Upgrading**: the database schema goes from 5 to 7 at start-up (publisher plans, logos and
+weekly counts; reader plans, filters and pauses).
 
 - **Paid publisher plans**, set by the operator (`publisher plan`, `publishers`), with an end
   date: a logo on the subscribe page, the welcome text in the confirmation email, and
   confirmations and departures week by week. No price in the code; readers never affected
   ([docs/for-publishers.md](docs/for-publishers.md#paid-plans)).
+- **Watch, a paid plan for readers**, set by the operator (`reader plan`), with an end date:
+  keyword filters per feed (words to include, words to exclude; whole words, any case or
+  accent) and pauses (7, 14 or 30 days, or until resumed). What they hold back is never sent.
+  Without the plan, everything is sent as before.
 
 ## 0.3.0 (2026-11-15)
 

@@ -11,6 +11,7 @@ import type { Locale } from './i18n/index.ts';
 import type { Cadence, EntryRow, FeedRow } from './model.ts';
 import { DAY } from './ratelimit.ts';
 import { count, getState, setState } from './stats.ts';
+import { markHeld, screen } from './watch.ts';
 
 const MAX_ATTEMPTS = 5;
 /** An entry older than this is no longer sent (long suspension, prolonged outage). */
@@ -118,7 +119,10 @@ export async function sendImmediate(ctx: Ctx): Promise<SendReport> {
   const report: SendReport = { mails: 0, entries: 0, failures: 0, deferred: false };
   const started = ctx.now();
   const since = Number(getState(ctx.db, 'immediate.complete') ?? 0);
-  for (const rows of groupBySubscription(owedImmediate(ctx, since)).values()) {
+  // Readers' filters and pauses (watch plan): what they hold back is recorded, never sent.
+  const { send, held } = screen(ctx, owedImmediate(ctx, since));
+  markHeld(ctx, held);
+  for (const rows of groupBySubscription(send).values()) {
     // A feed that publishes many entries at once must not flood the inbox: one grouped email.
     const batches = rows.length > ctx.config.burstLimit ? [rows] : rows.map((r) => [r]);
     for (const batch of batches) {
@@ -181,7 +185,8 @@ export async function sendDigests(ctx: Ctx): Promise<SendReport> {
   }
   const done = stmt(ctx.db, 'UPDATE subscriptions SET last_digest_at = ? WHERE id = ?');
   for (const { cadence, ids } of groups.values()) {
-    const rows = ids.flatMap((id) => owedEntries(ctx, [cadence], id));
+    const { send: rows, held } = screen(ctx, ids.flatMap((id) => owedEntries(ctx, [cadence], id)));
+    markHeld(ctx, held);
     let ok = true;
     if (rows.length) {
       if (!canSendBulk(ctx)) return { ...report, deferred: true };

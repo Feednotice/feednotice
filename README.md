@@ -36,6 +36,8 @@ HTTPS proxy, all in Docker.
 - **Deliverability**: DKIM signing, bounce handling through the bundled MTA, warm-up caps.
 - **One digest per reader**: digests due at the same time arrive as one email, a section per
   feed.
+- **Filters and pauses** (a paid plan for readers, set by the operator): only the entries with
+  given words, never those with others; a feed paused for a week or until resumed.
 - **Dead feeds**: when a feed stops answering, its subscribers are told; it is retried daily and
   resumes by itself, or the subscriptions end after 30 days.
 - **Publisher space**: a publisher proves a domain and gets their name and welcome text on
@@ -94,6 +96,7 @@ in the email dropped into `data/outbox/`. Add `&lang=fr` for French.
 | `node src/cli.ts doctor` | checks settings, DNS (A, PTR, MX, SPF, DKIM, DMARC), port 25, HTTPS, Spamhaus |
 | `node src/cli.ts block feed\|domain\|address <value> [reason]` | stops carrying a feed or a whole domain (subscribers told, subscriptions ended), or never writes to an address again; `unblock …` undoes, `blocks` lists |
 | `node src/cli.ts publisher plan <email\|domain> free\|pro\|business [until YYYY-MM-DD]` | gives a publisher a paid plan (logo, welcome in the confirmation email, week by week), with an optional end date; `publishers` lists who has what |
+| `node src/cli.ts reader plan <email> free\|watch [until YYYY-MM-DD]` | gives a reader the paid "watch" plan: keyword filters and pauses per feed, with an optional end date |
 | `node src/cli.ts stats [days]` | counters per day (default 14): sent, bounces, complaints, subscriptions; current state |
 
 In Docker: `docker compose exec app node src/cli.ts <command>`.
@@ -146,6 +149,7 @@ src/
   feeds.ts           preview, registration, periodic polling
   subscriptions.ts   request, confirmation, unsubscribe, account, bounces
   delivery.ts        immediate sends and digests, "at most once"
+  watch.ts           readers' paid plan: keyword filters and pauses
   cycle.ts           one round (read, then send), under a database lock
   purge.ts           GDPR erasure
   deadfeeds.ts       telling subscribers when a feed stops answering
