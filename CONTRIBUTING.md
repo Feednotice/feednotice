@@ -38,9 +38,11 @@ Maintainers, in this order:
    `## X.Y.Z (YYYY-MM-DD)` with an **Upgrading** note if needed, and update the version in
    `.env.example` and `docs/deploy.md`.
 2. Merge it.
-3. Actions → **Release** → **Run workflow**: version `X.Y.Z`, branch or commit `main`. The
-   workflow checks that `package.json` says the same version, creates the tag `vX.Y.Z`, runs
-   the tests, builds and pushes the images, and writes the release with the changelog section.
+3. Actions → **Release** → **Run workflow**: version `X.Y.Z`, branch or commit `main` (or a
+   commit id, short or full). The workflow checks that `package.json` says the same version,
+   creates the tag `vX.Y.Z`, runs the tests, builds and pushes the images, and writes the
+   release with the changelog section.
+   Only the highest version gets the `latest` tag, so re-releasing an older one is safe.
 
 Creating the release on GitHub by hand with a new tag works too: the same workflow runs.
 

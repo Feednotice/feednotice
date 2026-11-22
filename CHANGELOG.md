@@ -20,6 +20,9 @@ weekly counts; reader plans, filters and pauses).
 
 ## 0.3.0 (2026-11-15)
 
+*Never published: its release failed before any image was built. Install 0.4.0, which contains
+everything below.*
+
 **Upgrading**: the database schema goes from 4 to 5 at start-up (a table of blocks). New
 optional settings: `PAGES_PATH`, and `SMTP_*` in `.env` to send through a provider's relay.
 
