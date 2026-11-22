@@ -4,7 +4,7 @@ Versions follow [semantic versioning](https://semver.org): a database schema cha
 setting that must be changed is called out under **Upgrading**. Images:
 `ghcr.io/feednotice/feednotice`, `-mta`, `-backup`, tagged with the version.
 
-## Unreleased
+## 0.4.0 (2026-11-22)
 
 **Upgrading**: the database schema goes from 5 to 7 at start-up (publisher plans, logos and
 weekly counts; reader plans, filters and pauses).
