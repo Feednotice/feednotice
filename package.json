@@ -16,8 +16,8 @@
     "bench": "node --disable-warning=ExperimentalWarning scripts/bench.ts"
   },
   "dependencies": {
-    "fast-xml-parser": "^5.11.2",
-    "nodemailer": "^10.3.1"
+    "fast-xml-parser": "^5.12.1",
+    "nodemailer": "^10.6.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
